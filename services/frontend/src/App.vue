@@ -23,27 +23,61 @@
       @update:filtered-data="updateClusterSizeFiltered"
     />
     
-    <ClusterFlowChart :data="sizeFilteredClusterData" />
+    <div class="chart-wrapper">
+      <div class="chart-header">
+        <h3>Cluster Flow Visualization</h3>
+        <button 
+          @click="toggleChartType" 
+          class="chart-toggle-btn"
+          :class="{ 'active': chartType === 'stacked' }"
+        >
+          {{ chartType === 'sankey' ? 'Switch to Stacked Bars' : 'Switch to Sankey' }}
+        </button>
+      </div>
+      
+    <ClusterSankey 
+      v-if="chartType === 'sankey'"
+      :data="sizeFilteredClusterData" 
+      @threshold-selected="handleThresholdSelection"
+      @cluster-selected="handleClusterSelection"
+    />
+    
+    <ClusterStacked 
+      v-if="chartType === 'stacked'"
+      :data="sizeFilteredClusterData" 
+      @threshold-selected="handleThresholdSelection"
+      @cluster-selected="handleClusterSelection"
+    />
+    </div>
 
-    <ForceDirectedGraph :data="sizeFilteredClusterData" />
+    <ClusterBlob 
+      :data="sizeFilteredClusterData" 
+      :selected-threshold="selectedThreshold"
+      :selected-cluster="selectedCluster"
+      :outliers="[]"
+      @blob-selected="handleBlobSelection"
+      @point-selected="handlePointSelection"
+    />
   </div>
 </template>
 
 <script>
-import ClusterFlowChart from './components/ClusterFlowChart.vue';
+import ClusterSankey from './components/ClusterSankey.vue';
+import ClusterStacked from './components/ClusterStacked.vue';
 import ClusterFilterSlider from './components/ClusterFilterSlider.vue';
 import ClusterSelectorSlider from './components/ClusterSelectorSlider.vue';
-import ForceDirectedGraph from './components/ForceDirectedGraph.vue';
+import ClusterBlob from './components/ClusterBlob.vue';
 import axios from 'axios';
 import * as d3 from 'd3';
 
 export default {
   name: 'App',
   components: {
-    ClusterFlowChart,
+    ClusterSankey,
+    ClusterStacked,
     ClusterFilterSlider,
     ClusterSelectorSlider,
-    ForceDirectedGraph
+    ClusterBlob
   },
   data() {
     return {
@@ -56,7 +90,10 @@ export default {
       availableStages: [],
       deathData: {},
       selectedStages: [],
-      brushChart: null
+      brushChart: null,
+      chartType: 'sankey',
+      selectedThreshold: null,
+      selectedCluster: null
     };
   },
   created() {
@@ -160,6 +197,32 @@ export default {
     // Method to update data after filtering by cluster size
     updateClusterSizeFiltered(filteredData) {
       this.sizeFilteredClusterData = filteredData;
+    },
+    // Handle threshold selection from chart components
+    handleThresholdSelection(threshold) {
+      this.selectedThreshold = threshold;
+      console.log('Selected threshold:', threshold);
+      // You can add additional logic here to handle threshold selection
+    },
+    // Handle cluster selection from chart components
+    handleClusterSelection(cluster) {
+      this.selectedCluster = cluster;
+      console.log('Selected cluster:', cluster);
+      // You can add additional logic here to handle cluster selection
+    },
+    // Toggle between chart types
+    toggleChartType() {
+      this.chartType = this.chartType === 'sankey' ? 'stacked' : 'sankey';
+    },
+    // Handle blob selection from ClusterBlob component
+    handleBlobSelection(blob) {
+      console.log('Selected blob:', blob);
+      // You can add additional logic here to handle blob selection
+    },
+    // Handle point selection from ClusterBlob component
+    handlePointSelection(point) {
+      console.log('Selected point:', point);
+      // You can add additional logic here to handle point selection
     },
     // Initialize the brush chart
     initializeBrushChart() {
@@ -376,6 +439,52 @@ h1 {
 
 .brush .overlay {
   cursor: crosshair;
+}
+
+.chart-wrapper {
+  margin-bottom: 20px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 0 10px;
+}
+
+.chart-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chart-toggle-btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chart-toggle-btn:hover {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.chart-toggle-btn.active {
+  background-color: #e74c3c;
+}
+
+.chart-toggle-btn.active:hover {
+  background-color: #c0392b;
 }
 
 /* For mobile devices */

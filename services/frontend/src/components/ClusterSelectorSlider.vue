@@ -43,10 +43,13 @@ export default defineComponent({
       })
 
       // Chart dimensions
-      const margin = { top: 20, right: 30, bottom: 50, left: 50 }
+      const legendWidth = 100
+      // const legendMargin = 20
+      const margin = { top: 20, right: 50, bottom: 50, left: 50 }
       const width = chartContainer.value.clientWidth || 800
       const height = 300
-      const innerWidth = width - margin.left - margin.right
+      // const innerWidth = width - margin.left - margin.right - legendWidth - legendMargin
+      const innerWidth = width - margin.left - margin.right - legendWidth 
       const innerHeight = height - margin.top - margin.bottom
 
       // Create SVG
@@ -67,15 +70,11 @@ export default defineComponent({
         return entry
       }).sort((a, b) => a.tick - b.tick)
 
-      const reorderedData = []
-
-      // Add the 0th index first if it exists
-      if (stackedData.length > 0 && stackedData[0].tick === 0) {
-        reorderedData.push(stackedData[0])
-      }
-
-      const remainingData = stackedData.filter(d => d.tick !== 0).reverse()
-      reorderedData.push(...remainingData)
+      // Remove Original Labels (tick 0) and keep natural order for threshold visualization
+      // Lower thresholds (more clusters) on left, higher thresholds (fewer clusters) on right
+      const reorderedData = stackedData
+        .filter(d => d.tick !== 0)  // Remove Original Labels
+        // Keep natural order - no reverse needed
 
       // Assign new tick values for x-axis placement
       reorderedData.forEach((d, i) => {
@@ -172,15 +171,26 @@ export default defineComponent({
         const startIndex = Math.floor(x.invert(brushStart))
         const endIndex = Math.ceil(x.invert(brushEnd))
         
-        // Get stages in the selected range (in reverse order)
-        const brushedStages = props.availableStages
-          .filter((_, index) => index >= startIndex && index <= endIndex)
-          .reverse()
+        // Map brush indices directly to the reorderedData stages
+        // reorderedData contains the exact stages shown in the brush, in the correct order
+        const selectedReorderedData = reorderedData.filter((_, index) => index >= startIndex && index <= endIndex);
         
-        // Always include the 0th index and attach reversed brushed stages
-        const zeroStage = props.availableStages[0]
-        selectedStages.value = zeroStage 
-          ? [zeroStage, ...brushedStages.filter(stage => stage !== zeroStage)] 
+        // Convert ticks back to stage names using a simpler approach
+        const brushedStages = selectedReorderedData.map(d => {
+          const tickValue = d.tick;
+          // Find the stage name that has this tick value in the formatted data
+          // Since availableStages are formatted (e.g., "3.088"), we need to match properly
+          return props.availableStages.find(stage => {
+            if (stage === 'Original Labels') return false;
+            // Try to match the formatted stage name with the tick
+            return Math.abs(parseFloat(stage) - tickValue) < 0.001; // Small tolerance for floating point
+          });
+        }).filter(Boolean);
+        
+        // Always include Original Labels first, then add brushed stages
+        const originalLabelsStage = props.availableStages[0]
+        selectedStages.value = originalLabelsStage 
+          ? [originalLabelsStage, ...brushedStages] 
           : [...brushedStages]
         
         // Emit selected stages
@@ -189,19 +199,16 @@ export default defineComponent({
         // Filter data based on brush selection
         const filteredData = {}
         
-        // Add the 0th index data first
-        if (zeroStage && props.deathData[0]) {
-          filteredData[zeroStage] = props.deathData[0]
+        // Add Original Labels data first (always included)
+        if (originalLabelsStage && props.deathData[0]) {
+          filteredData[originalLabelsStage] = props.deathData[0]
         }
         
-        // Then add the reversed brushed data
+        // Then add the brushed threshold stages
         brushedStages.forEach((stage) => {
-          // Skip if it's the 0th stage (already added)
-          if (stage === zeroStage) return
-          
-          // Find the original index of this stage
+          // Find the original index of this stage in availableStages
           const index = props.availableStages.indexOf(stage)
-          if (props.deathData[index]) {
+          if (index !== -1 && props.deathData[index]) {
             filteredData[stage] = props.deathData[index]
           }
         })
@@ -212,31 +219,47 @@ export default defineComponent({
 
 
       // Legend
-      const legendSpace = innerHeight / keys.length
       const legend = svg.append('g')
         .attr('class', 'legend')
-        .attr('transform', `translate(${innerWidth - 100}, 10)`)
+        // .attr('transform', `translate(${margin.left + innerWidth + legendMargin}, ${margin.top})`)
+        .attr('transform', `translate(${margin.left + innerWidth}, ${margin.top})`)
 
-      legend.selectAll('rect')
-        .data(keys)
-        .enter()
-        .append('rect')
-        .attr('x', 0)
-        .attr('y', (d, i) => i * 20)
-        .attr('width', 12)
-        .attr('height', 12)
-        .attr('fill', d => color(d))
 
-      legend.selectAll('text')
-        .data(keys)
-        .enter()
-        .append('text')
-        .attr('x', 18)
-        .attr('y', (d, i) => i * 20 + 9)
-        .attr('font-size', '12px')
-        .attr('fill', '#333')
-        .text(d => d)
-    }
+      // Legend background
+      legend.append('rect')
+        .attr('x', -10)
+        .attr('y', -10)
+        .attr('width', legendWidth)
+        .attr('height', keys.length * 20 + 15)
+        .attr('fill', 'rgba(255, 255, 255, 0.95)')
+        .attr('stroke', '#ddd')
+        .attr('stroke-width', 1)
+        .attr('rx', 4)
+
+        
+        // Legend color squares
+        legend.selectAll('rect.legend-color')
+          .data(keys)
+          .enter()
+          .append('rect')
+          .attr('class', 'legend-color')
+          .attr('x', 0)
+          .attr('y', (d, i) => i * 20)
+          .attr('width', 12)
+          .attr('height', 12)
+          .attr('fill', d => color(d))
+
+        // Legend text
+        legend.selectAll('text')
+          .data(keys)
+          .enter()
+          .append('text')
+          .attr('x', 18)
+          .attr('y', (d, i) => i * 20 + 9)
+          .attr('font-size', '11px')
+          .attr('fill', '#555')
+          .text(d => d)
+      }
 
     // Initialize
     onMounted(() => {

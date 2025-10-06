@@ -17,7 +17,7 @@ app.add_middleware(
 
 @app.get("/")
 def home():
-    return "N!"
+    return "Null"
 
 @app.get("/config")
 def config():
