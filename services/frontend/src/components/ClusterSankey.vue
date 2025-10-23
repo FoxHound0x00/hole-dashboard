@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="sankey-wrapper">
     <div ref="chart" class="chart-container"></div>
     <div class="info-box" ref="infoBox">
       <div v-if="selectedInfo">
@@ -100,8 +100,10 @@ export default {
       
       el.innerHTML = '';
       
-      const { width, height } = this;
-      const margin = { top: 60, right: 50, bottom: 50, left: 50 };
+      // Use container dimensions instead of props
+      const width = el.clientWidth || 800;
+      const height = el.clientHeight || 500;
+      const margin = { top: 60, right: 50, bottom: 30, left: 50 };
       const innerWidth = width - margin.left - margin.right;
       const innerHeight = height - margin.top - margin.bottom;
       
@@ -282,20 +284,33 @@ export default {
         }, 0);
         
         // Create stacked bars - each cluster gets height proportional to its data points
-        let currentY = 0;
         const minVisibleHeight = 3; // Minimum height to make tiny clusters visible
         
+        // First pass: calculate initial heights
+        const initialHeights = {};
         sortedClusters.forEach(cluster => {
           const itemCount = stageData[stage][cluster];
-          
-          // Height proportional to this cluster's share of the stage's total data
           const proportionOfStage = itemCount / totalDataPointsInStage;
-          let height = proportionOfStage * innerHeight; // Use full canvas height
+          let height = proportionOfStage * innerHeight;
           
           // Ensure tiny clusters are still visible
           if (height > 0 && height < minVisibleHeight) {
             height = minVisibleHeight;
           }
+          
+          initialHeights[cluster] = height;
+        });
+        
+        // Calculate total height needed
+        const totalNeededHeight = Object.values(initialHeights).reduce((sum, h) => sum + h, 0);
+        
+        // Scale down if needed to fit within canvas
+        const scaleFactor = totalNeededHeight > innerHeight ? innerHeight / totalNeededHeight : 1;
+        
+        // Second pass: assign positions with scaled heights
+        let currentY = 0;
+        sortedClusters.forEach(cluster => {
+          const height = initialHeights[cluster] * scaleFactor;
           
           clusterPositions[cluster] = {
             y: currentY,
@@ -327,13 +342,17 @@ export default {
       
       // Helper for clearing active selection
       const clearActiveSelection = () => {
-        // Reset all nodes to normal
+        // Reset all nodes to normal with transition
         chart.selectAll('.node')
+          .transition()
+          .duration(150)
           .attr('stroke', '#fff')
           .attr('stroke-width', 1);
         
-        // Reset all flows to normal
+        // Reset all flows to normal with transition
         chart.selectAll('.flow')
+          .transition()
+          .duration(150)
           .style('opacity', 0.4)
           .style('stroke-width', d => lineWidthScale(d.count));
         
@@ -352,8 +371,10 @@ export default {
       
       // Function to highlight incoming connections and source nodes
       const highlightIncoming = (targetStage, targetCluster, permanent = false) => {
-        // Dim all flows
+        // Dim all flows with transition
         chart.selectAll('.flow')
+          .transition()
+          .duration(150)
           .style('opacity', 0.1)
           .style('stroke-width', d => lineWidthScale(d.count));
         
@@ -368,6 +389,8 @@ export default {
           
           chart.selectAll(`.${sourceClass}.${targetClass}`)
             .filter(d => d.sourceStage === flow.sourceStage && d.targetStage === flow.targetStage)
+            .transition()
+            .duration(150)
             .style('opacity', 0.8)
             .style('stroke-width', d => lineWidthScale(d.count) + 2);
           
@@ -376,6 +399,8 @@ export default {
             // Escape selector
             const nodeClass = this.escapeSelector(`node-${flow.sourceStage}-${flow.sourceCluster}`);
             chart.selectAll(`.${nodeClass}`)
+              .transition()
+              .duration(150)
               .attr('stroke', '#ff8800')
               .attr('stroke-width', 2);
           }
@@ -384,6 +409,8 @@ export default {
         // Highlight the target node (escape selector)
         const nodeClass = this.escapeSelector(`node-${targetStage}-${targetCluster}`);
         chart.selectAll(`.${nodeClass}`)
+          .transition()
+          .duration(150)
           .attr('stroke', permanent ? '#ff0000' : '#ffcc00')
           .attr('stroke-width', 2);
       };
@@ -489,13 +516,17 @@ export default {
                 // Clear info box
                 this.clearInfoBox();
                 
-                // Reset flows
+                // Reset flows with transition
                 chart.selectAll('.flow')
+                  .transition()
+                  .duration(150)
                   .style('opacity', 0.4)
                   .style('stroke-width', d => lineWidthScale(d.count));
                 
-                // Reset node highlighting
+                // Reset node highlighting with transition
                 chart.selectAll('.node')
+                  .transition()
+                  .duration(150)
                   .attr('stroke', '#fff')
                   .attr('stroke-width', 1);
               }
@@ -601,8 +632,10 @@ export default {
               total: d.count
             };
             
-            // Highlight this flow
+            // Highlight this flow with transition
             d3.select(event.target)
+              .transition()
+              .duration(150)
               .style('opacity', 0.8)
               .style('stroke-width', lineWidthScale(d.count) + 2);
             
@@ -613,10 +646,14 @@ export default {
             const safeTargetCluster = d.targetCluster.replace(/[^a-zA-Z0-9-]/g, '_');
             
             chart.select(`.node-${safeSourceStage}-${safeSourceCluster}`)
+              .transition()
+              .duration(150)
               .attr('stroke', '#ffcc00')
               .attr('stroke-width', 2);
             
             chart.select(`.node-${safeTargetStage}-${safeTargetCluster}`)
+              .transition()
+              .duration(150)
               .attr('stroke', '#ffcc00')
               .attr('stroke-width', 2);
           }
@@ -627,13 +664,17 @@ export default {
             // Clear info box
             this.clearInfoBox();
             
-            // Reset this flow
+            // Reset this flow with transition
             chart.selectAll('.flow')
+              .transition()
+              .duration(150)
               .style('opacity', 0.4)
               .style('stroke-width', d => lineWidthScale(d.count));
             
-            // Reset node highlighting
+            // Reset node highlighting with transition
             chart.selectAll('.node')
+              .transition()
+              .duration(150)
               .attr('stroke', '#fff')
               .attr('stroke-width', 1);
           }
@@ -652,28 +693,40 @@ export default {
 </script>
 
 <style scoped>
+.sankey-wrapper {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 .chart-container {
   width: 100%;
-  min-height: 500px;
-  margin-bottom: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background-color: #fafafa;
 }
 
 .info-box {
   width: 100%;
-  min-height: 80px;
+  flex-shrink: 0;
+  min-height: 70px;
+  max-height: 90px;
   border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 10px;
+  border-radius: 4px;
+  padding: 8px;
   background-color: #f9f9f9;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: auto;
 }
 
 .info-box h3 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin: 0 0 8px 0;
+  font-size: 13px;
   color: #333;
+  font-weight: 600;
 }
 
 .info-stats {

@@ -1,63 +1,81 @@
 <template>
   <div class="app">
-    <h1>Cluster Flow Visualization</h1>
-    
-    <div class="dropdown-container">
-      <div class="dropdown-item" v-for="(options, title) in dropdownOptions" :key="title">
-        <label>{{ title }}</label>
-        <select v-model="selectedOptions[title]" @change="updateClusterData">
-          <option v-for="option in options" :key="option" :value="option">{{ option }}</option>
-        </select>
+    <!-- Compact Header -->
+    <div class="header">
+      <h1>Cluster Flow Visualization</h1>
+      <div class="dropdown-container">
+        <div class="dropdown-item" v-for="(options, title) in dropdownOptions" :key="title">
+          <label>{{ title }}</label>
+          <select v-model="selectedOptions[title]" @change="updateClusterData">
+            <option v-for="option in options" :key="option" :value="option">{{ option }}</option>
+          </select>
+        </div>
       </div>
     </div>
     
-    <ClusterSelectorSlider 
-    :deathData="deathData"
-    :availableStages="availableStages"
-    @update:selected-stages="updateSelectedStages"
-    @update:selected-clusters="updateSelectedClusters"
-  />
+    <!-- Left Sidebar: Selectors and Filters -->
+    <div class="sidebar">
+      <ClusterSelectorSlider 
+        :deathData="deathData"
+        :availableStages="availableStages"
+        @update:selected-stages="updateSelectedStages"
+        @update:selected-clusters="updateSelectedClusters"
+      />
+      
+      <ClusterFilterSlider 
+        :cluster-data="filteredClusterData" 
+        @update:filtered-data="updateClusterSizeFiltered"
+      />
+    </div>
     
-    <ClusterFilterSlider 
-      :cluster-data="filteredClusterData" 
-      @update:filtered-data="updateClusterSizeFiltered"
-    />
-    
-    <div class="chart-wrapper">
+    <!-- Top Right: Main Visualization (Sankey/Stacked) -->
+    <div class="main-viz">
       <div class="chart-header">
-        <h3>Cluster Flow Visualization</h3>
+        <h3>Flow Visualization</h3>
         <button 
           @click="toggleChartType" 
           class="chart-toggle-btn"
           :class="{ 'active': chartType === 'stacked' }"
         >
-          {{ chartType === 'sankey' ? 'Switch to Stacked Bars' : 'Switch to Sankey' }}
+          {{ chartType === 'sankey' ? 'Stacked Bars' : 'Sankey' }}
         </button>
       </div>
       
-    <ClusterSankey 
-      v-if="chartType === 'sankey'"
-      :data="sizeFilteredClusterData" 
-      @threshold-selected="handleThresholdSelection"
-      @cluster-selected="handleClusterSelection"
-    />
-    
-    <ClusterStacked 
-      v-if="chartType === 'stacked'"
-      :data="sizeFilteredClusterData" 
-      @threshold-selected="handleThresholdSelection"
-      @cluster-selected="handleClusterSelection"
-    />
+      <ClusterSankey 
+        v-if="chartType === 'sankey'"
+        :data="sizeFilteredClusterData" 
+        @threshold-selected="handleThresholdSelection"
+        @cluster-selected="handleClusterSelection"
+      />
+      
+      <ClusterStacked 
+        v-if="chartType === 'stacked'"
+        :data="sizeFilteredClusterData" 
+        @threshold-selected="handleThresholdSelection"
+        @cluster-selected="handleClusterSelection"
+      />
     </div>
 
-    <ClusterBlob 
-      :data="sizeFilteredClusterData" 
-      :selected-threshold="selectedThreshold"
-      :selected-cluster="selectedCluster"
-      :outliers="[]"
-      @blob-selected="handleBlobSelection"
-      @point-selected="handlePointSelection"
-    />
+    <!-- Bottom Left: Blob Visualization -->
+    <div class="blob-viz">
+      <ClusterBlob 
+        :data="sizeFilteredClusterData" 
+        :selected-threshold="selectedThreshold"
+        :selected-cluster="selectedCluster"
+        :outliers="[]"
+        @blob-selected="handleBlobSelection"
+        @point-selected="handlePointSelection"
+      />
+    </div>
+
+    <!-- Bottom Right: Heatmap -->
+    <div class="heatmap-viz">
+      <HeatmapDendrogram 
+        v-if="selectedOptions['Distance Metric']"
+        :metric="selectedOptions['Distance Metric']"
+        :cluster-data="rawClusterData"
+      />
+    </div>
   </div>
 </template>
 
@@ -67,6 +85,7 @@ import ClusterStacked from './components/ClusterStacked.vue';
 import ClusterFilterSlider from './components/ClusterFilterSlider.vue';
 import ClusterSelectorSlider from './components/ClusterSelectorSlider.vue';
 import ClusterBlob from './components/ClusterBlob.vue';
+import HeatmapDendrogram from './components/HeatmapDendrogram.vue';
 import axios from 'axios';
 import * as d3 from 'd3';
 
@@ -77,7 +96,8 @@ export default {
     ClusterStacked,
     ClusterFilterSlider,
     ClusterSelectorSlider,
-    ClusterBlob
+    ClusterBlob,
+    HeatmapDendrogram
   },
   data() {
     return {
@@ -354,61 +374,85 @@ export default {
 </script>
 
 <style>
-.app {
-  font-family: Arial, sans-serif;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 20px;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 30px;
+.app {
+  font-family: Arial, sans-serif;
+  height: 100vh;
+  width: 100vw;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "header header"
+    "sidebar main-viz"
+    "blob-viz heatmap-viz";
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+  background-color: #f5f5f5;
+}
+
+/* Header Area */
+.header {
+  grid-area: header;
+  background: white;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-height: 0;
+}
+
+.header h1 {
+  font-size: 18px;
   color: #2c3e50;
+  margin: 0;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .dropdown-container {
   display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 30px;
-  gap: 20px;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
 }
 
 .dropdown-item {
-  flex: 1;
-  min-width: 200px;
-  max-width: 300px;
-  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .dropdown-item label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: bold;
+  font-weight: 600;
   color: #2c3e50;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .dropdown-item select {
-  width: 100%;
-  padding: 10px 15px;
+  padding: 6px 10px;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
   background-color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8.825L1.175 4 2.05 3.125 6 7.075 9.95 3.125 10.825 4z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 8px center;
+  padding-right: 30px;
 }
 
 .dropdown-item select:hover {
-  border-color: #c0c4cc;
+  border-color: #3498db;
 }
 
 .dropdown-item select:focus {
@@ -417,46 +461,40 @@ h1 {
   box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
-.stage-selector {
-  margin-bottom: 30px;
-  background-color: #f8f9fa;
-  padding: 15px;
-  border-radius: 6px;
-  border: 1px solid #e9ecef;
+/* Sidebar (Selectors and Filters) */
+.sidebar {
+  grid-area: sidebar;
+  display: grid;
+  grid-template-rows: 2fr 1fr;
+  gap: 8px;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.stage-selector h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 16px;
-  color: #2c3e50;
-}
-
-.brush-container {
-  width: 100%;
-  height: 150px;
-}
-
-.brush .overlay {
-  cursor: crosshair;
-}
-
-.chart-wrapper {
-  margin-bottom: 20px;
+/* Main Visualization Area */
+.main-viz {
+  grid-area: main-viz;
+  background: white;
+  border: 1px solid #e0e0e0;
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding: 0 10px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
 }
 
 .chart-header h3 {
   margin: 0;
   color: #2c3e50;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -464,19 +502,16 @@ h1 {
   background-color: #3498db;
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
 }
 
 .chart-toggle-btn:hover {
   background-color: #2980b9;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .chart-toggle-btn.active {
@@ -487,15 +522,41 @@ h1 {
   background-color: #c0392b;
 }
 
-/* For mobile devices */
-@media (max-width: 768px) {
-  .dropdown-container {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .dropdown-item {
-    max-width: none;
-  }
+/* Blob Visualization */
+.blob-viz {
+  grid-area: blob-viz;
+  background: white;
+  border: 1px solid #e0e0e0;
+  padding: 10px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Heatmap Visualization */
+.heatmap-viz {
+  grid-area: heatmap-viz;
+  background: white;
+  border: 1px solid #e0e0e0;
+  padding: 10px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Ensure components fill their containers */
+.sidebar > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.main-viz > *:not(.chart-header) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.blob-viz > *,
+.heatmap-viz > * {
+  height: 100%;
+  width: 100%;
 }
 </style>

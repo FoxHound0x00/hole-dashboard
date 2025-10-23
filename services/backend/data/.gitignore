@@ -1,0 +1,8 @@
+# Ignore all data files
+*.npy
+*.json
+
+# But keep this gitignore
+!.gitignore
+
+

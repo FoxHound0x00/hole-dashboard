@@ -6,7 +6,7 @@
         <input 
           type="range" 
           class="size-slider" 
-          min="1" 
+          min="0" 
           :max="maxClusterSize" 
           v-model.number="minClusterSize"
           @input="updateFilteredData" 
@@ -44,7 +44,7 @@
     },
     data() {
       return {
-        minClusterSize: 1,
+        minClusterSize: 0,
         maxClusterSize: 1,
         filteredData: {},
         totalOriginalItems: 0,
@@ -81,7 +81,7 @@
         this.maxClusterSize = max;
         // Reset the min cluster size if needed
         if (this.minClusterSize > this.maxClusterSize) {
-          this.minClusterSize = 1;
+          this.minClusterSize = 0;
         }
       },
       
@@ -169,18 +169,17 @@
   
   <style scoped>
   .cluster-filter {
-    margin-bottom: 30px;
     background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 6px;
-    border: 1px solid #e9ecef;
+    padding: 8px;
+    border: 1px solid #e0e0e0;
   }
   
   .cluster-filter h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 16px;
-    color: #2c3e50;
+    margin: 0 0 6px 0;
+    font-size: 13px;
+    color: #333;
+    font-weight: 600;
+    letter-spacing: 0.3px;
   }
   
   .slider-container {

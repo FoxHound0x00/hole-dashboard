@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="stacked-wrapper">
     <div ref="chart" class="chart-container"></div>
     <div class="info-box" ref="infoBox">
       <div v-if="selectedInfo">
@@ -96,8 +96,10 @@ export default {
       
       el.innerHTML = '';
       
-      const { width, height } = this;
-      const margin = { top: 80, right: 180, bottom: 80, left: 70 };
+      // Use container dimensions
+      const width = el.clientWidth || 800;
+      const height = el.clientHeight || 500;
+      const margin = { top: 60, right: 160, bottom: 60, left: 60 };
       const innerWidth = width - margin.left - margin.right;
       const innerHeight = height - margin.top - margin.bottom;
       
@@ -275,24 +277,24 @@ export default {
           const stage = d.data.stage;
           const count = d[1] - d[0];
           
-          // Strong highlight effect similar to sankey
+          // Subtle highlight effect that blends in
           const currentElement = d3.select(event.target);
           
-          // Dim all other segments
+          // Gently dim all other segments (less dramatic)
           chart.selectAll('rect')
             .filter(function() { return this !== event.target; })
             .transition()
             .duration(150)
-            .style('opacity', 0.3);
+            .style('opacity', 0.5);
           
-          // Strong highlight for the hovered segment
+          // Subtle highlight for the hovered segment
           currentElement
             .transition()
             .duration(150)
-            .attr('stroke', '#ff8800')
-            .attr('stroke-width', 3)
+            .attr('stroke', '#ffcc66')
+            .attr('stroke-width', 2)
             .style('opacity', 1)
-            .style('filter', 'brightness(1.15) drop-shadow(0px 2px 4px rgba(0,0,0,0.3))');
+            .style('filter', 'brightness(1.08) drop-shadow(0px 1px 2px rgba(0,0,0,0.15))');
           
           self.updateInfoBox(stage, cluster, count, {
             incoming: 0,
@@ -379,7 +381,19 @@ export default {
         .style('fill', '#333')
         .text('Cluster Distribution Across Stages');
       
-      // Add improved legend positioned outside the chart area
+      // Get original labels (clusters from "Original Labels" stage)
+      const originalLabels = this.data['Original Labels'] 
+        ? Array.from(new Set(this.data['Original Labels'])).sort((a, b) => {
+            const numA = parseFloat(a);
+            const numB = parseFloat(b);
+            if (!isNaN(numA) && !isNaN(numB)) {
+              return numA - numB;
+            }
+            return a.localeCompare(b);
+          })
+        : [];
+      
+      // Add improved legend positioned outside the chart area (only original labels)
       const legendWidth = 150;
       const legend = svg.append('g') // Append to svg instead of chart to position outside
         .attr('class', 'legend')
@@ -390,14 +404,14 @@ export default {
         .attr('x', -10)
         .attr('y', -10)
         .attr('width', legendWidth)
-        .attr('height', Math.min(clusters.length, 10) * 22 + 15) // Limit height
+        .attr('height', Math.min(originalLabels.length, 10) * 22 + 15) // Limit height
         .attr('fill', 'rgba(255, 255, 255, 0.95)')
         .attr('stroke', '#ddd')
         .attr('stroke-width', 1)
         .attr('rx', 4);
       
       const legendItems = legend.selectAll('.legend-item')
-        .data(clusters.slice(0, 10)) // Limit to first 10 clusters to avoid overflow
+        .data(originalLabels.slice(0, 10)) // Limit to first 10 original labels to avoid overflow
         .enter()
         .append('g')
         .attr('class', 'legend-item')
@@ -431,28 +445,40 @@ export default {
 </script>
 
 <style scoped>
+.stacked-wrapper {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 .chart-container {
   width: 100%;
-  min-height: 500px;
-  margin-bottom: 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background-color: #fafafa;
 }
 
 .info-box {
   width: 100%;
-  min-height: 80px;
+  flex-shrink: 0;
+  min-height: 70px;
+  max-height: 90px;
   border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 10px;
+  border-radius: 4px;
+  padding: 8px;
   background-color: #f9f9f9;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: auto;
 }
 
 .info-box h3 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 16px;
+  margin: 0 0 8px 0;
+  font-size: 13px;
   color: #333;
+  font-weight: 600;
 }
 
 .info-stats {

@@ -42,13 +42,11 @@ export default defineComponent({
         Object.keys(tickData).forEach(subkey => allSubkeys.add(subkey))
       })
 
-      // Chart dimensions
+      // Chart dimensions - responsive to container
       const legendWidth = 100
-      // const legendMargin = 20
-      const margin = { top: 20, right: 50, bottom: 50, left: 50 }
+      const margin = { top: 20, right: 50, bottom: 40, left: 50 }
       const width = chartContainer.value.clientWidth || 800
-      const height = 300
-      // const innerWidth = width - margin.left - margin.right - legendWidth - legendMargin
+      const height = chartContainer.value.clientHeight || 200
       const innerWidth = width - margin.left - margin.right - legendWidth 
       const innerHeight = height - margin.top - margin.bottom
 
@@ -62,6 +60,20 @@ export default defineComponent({
 
       // Prepare data for stacking
       const keys = Array.from(allSubkeys)
+      
+      // Get original labels from the "Original Labels" stage
+      // The deathData structure is { stageName: { clusterLabel: count, ... }, ... }
+      const originalLabelsData = props.deathData['Original Labels']
+      
+      const originalLabels = originalLabelsData ? Object.keys(originalLabelsData).sort((a, b) => {
+        const numA = parseFloat(a);
+        const numB = parseFloat(b);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return numA - numB;
+        }
+        return a.localeCompare(b);
+      }) : keys
+      
       const stackedData = Object.entries(props.deathData).map(([tick, tickData]) => {
         const entry = { tick: Number(tick) }
         keys.forEach(key => {
@@ -218,7 +230,7 @@ export default defineComponent({
       }
 
 
-      // Legend
+      // Legend - only show original labels
       const legend = svg.append('g')
         .attr('class', 'legend')
         // .attr('transform', `translate(${margin.left + innerWidth + legendMargin}, ${margin.top})`)
@@ -230,16 +242,16 @@ export default defineComponent({
         .attr('x', -10)
         .attr('y', -10)
         .attr('width', legendWidth)
-        .attr('height', keys.length * 20 + 15)
+        .attr('height', originalLabels.length * 20 + 15)
         .attr('fill', 'rgba(255, 255, 255, 0.95)')
         .attr('stroke', '#ddd')
         .attr('stroke-width', 1)
         .attr('rx', 4)
 
         
-        // Legend color squares
+        // Legend color squares - only original labels
         legend.selectAll('rect.legend-color')
-          .data(keys)
+          .data(originalLabels)
           .enter()
           .append('rect')
           .attr('class', 'legend-color')
@@ -249,9 +261,9 @@ export default defineComponent({
           .attr('height', 12)
           .attr('fill', d => color(d))
 
-        // Legend text
+        // Legend text - only original labels
         legend.selectAll('text')
-          .data(keys)
+          .data(originalLabels)
           .enter()
           .append('text')
           .attr('x', 18)
@@ -284,28 +296,31 @@ export default defineComponent({
 
 <style scoped>
 .cluster-selector {
-  margin-bottom: 30px;
   background-color: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .cluster-selector h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 16px;
-  color: #2c3e50;
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #333;
   font-weight: 600;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
 }
 
 .chart-container {
   width: 100%;
-  height: 300px;
+  flex: 1;
   background-color: white;
-  border-radius: 4px;
+  border: 1px solid #d0d0d0;
   overflow: hidden;
+  min-height: 0;
 }
 
 .brush .selection {
