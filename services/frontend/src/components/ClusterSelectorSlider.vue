@@ -123,8 +123,8 @@ export default defineComponent({
         .attr('d', area)
         .attr('fill', d => color(d.key))
         .attr('opacity', 0.7)
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1)
+        .attr('stroke', d => color(d.key))
+        .attr('stroke-width', 0.5)
 
 
       // X Axis

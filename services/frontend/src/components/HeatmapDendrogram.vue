@@ -563,14 +563,14 @@ export default {
   text-align: center;
   padding: 40px;
   color: #666;
-  font-size: 16px;
+  font-size: 13px;
 }
 
 .error {
   text-align: center;
   padding: 40px;
   color: #e74c3c;
-  font-size: 16px;
+  font-size: 13px;
   background-color: #fadbd8;
   border-radius: 4px;
 }

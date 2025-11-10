@@ -603,9 +603,10 @@ export default defineComponent({
 .force-directed-graph h3 {
   margin-top: 0;
   margin-bottom: 15px;
-  font-size: 16px;
+  font-size: 13px;
   color: #2c3e50;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .graph-container {

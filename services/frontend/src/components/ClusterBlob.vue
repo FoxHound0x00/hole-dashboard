@@ -1,11 +1,29 @@
 <template>
-  <div class="cluster-blob" :class="{ 'legend-expanded': legendExpanded }">
+  <div class="cluster-blob" :class="{ 'legend-expanded': legendExpanded, 'menu-expanded': menuExpanded }">
     <h3>Cluster Blob Visualization</h3>
+    <div class="menu-toggle" @click="menuExpanded = !menuExpanded">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path v-if="!menuExpanded" d="M5 3l6 5-6 5V3z"/>
+        <path v-else d="M11 3L5 8l6 5V3z"/>
+      </svg>
+    </div>
+    <div class="menu" v-show="menuExpanded">
+      <div class="menu-header">Visualization Method</div>
+      <button 
+        v-for="method in visualizationMethods" 
+        :key="method.id"
+        class="menu-button"
+        :class="{ active: selectedMethod === method.id }"
+        @click="selectMethod(method.id)"
+      >
+        {{ method.label }}
+      </button>
+    </div>
     <div ref="blobContainer" class="blob-container"></div>
     <div class="legend-toggle" @click="legendExpanded = !legendExpanded">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-        <path v-if="!legendExpanded" d="M5 3l6 5-6 5V3z"/>
-        <path v-else d="M11 3L5 8l6 5V3z"/>
+        <path v-if="!legendExpanded" d="M11 3L5 8l6 5V3z"/>
+        <path v-else d="M5 3l6 5-6 5V3z"/>
       </svg>
     </div>
     <div class="legend" ref="legendContainer" v-show="legendExpanded"></div>
@@ -36,7 +54,7 @@ export default defineComponent({
       default: () => []
     }
   },
-  emits: ['blob-selected', 'point-selected'],
+  emits: ['blob-selected', 'point-selected', 'visualization-method-selected'],
   setup(props, { emit }) {
     const blobContainer = ref(null);
     const legendContainer = ref(null);
@@ -46,6 +64,25 @@ export default defineComponent({
     const pcaData = ref(null);  // Store PCA projections
     const loading = ref(true);
     const legendExpanded = ref(false);
+    const menuExpanded = ref(false);
+    const selectedMethod = ref('pca');
+    
+    // Visualization methods
+    const visualizationMethods = [
+      { id: 'pca', label: 'PCA' },
+      { id: 'lda', label: 'LDA' },
+      { id: 'mds', label: 'MDS' },
+      { id: 'tsne', label: 'T-SNE' },
+      { id: 'fd', label: 'FD-graph' }
+    ];
+    
+    // Select visualization method
+    const selectMethod = (methodId) => {
+      selectedMethod.value = methodId;
+      emit('visualization-method-selected', methodId);
+      // Placeholder for future implementation
+      console.log(`Selected visualization method: ${methodId}`);
+    };
     
     // Extended color scheme for original labels
     const originalLabelColors = [
@@ -704,7 +741,11 @@ export default defineComponent({
       blobContainer,
       legendContainer,
       loading,
-      legendExpanded
+      legendExpanded,
+      menuExpanded,
+      selectedMethod,
+      visualizationMethods,
+      selectMethod
     };
   }
 });
@@ -718,11 +759,11 @@ export default defineComponent({
   padding: 8px;
   border: 1px solid #e0e0e0;
   display: grid;
-  grid-template-columns: 1fr 24px 0px;
+  grid-template-columns: 0px 24px 1fr 24px 0px;
   grid-template-rows: auto 1fr;
   grid-template-areas:
-    "title title title"
-    "blob toggle legend";
+    ". title title . ."
+    "menu menu-toggle blob legend-toggle legend";
   gap: 0;
   overflow: hidden;
   position: relative;
@@ -730,7 +771,15 @@ export default defineComponent({
 }
 
 .cluster-blob.legend-expanded {
-  grid-template-columns: 1fr 24px 350px;
+  grid-template-columns: 0px 24px 1fr 24px 350px;
+}
+
+.cluster-blob.menu-expanded {
+  grid-template-columns: 200px 24px 1fr 24px 0px;
+}
+
+.cluster-blob.menu-expanded.legend-expanded {
+  grid-template-columns: 200px 24px 1fr 24px 350px;
 }
 
 .cluster-blob h3 {
@@ -740,6 +789,81 @@ export default defineComponent({
   color: #333;
   font-weight: 600;
   letter-spacing: 0.3px;
+}
+
+.menu-toggle {
+  grid-area: menu-toggle;
+  grid-row: 2;
+  width: 24px;
+  height: 100%;
+  background-color: #fafafa;
+  border-top: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+  border-left: 1px solid #d0d0d0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  color: #666;
+}
+
+.menu-toggle:hover {
+  background-color: #e8e8e8;
+  color: #333;
+}
+
+.menu {
+  grid-area: menu;
+  background-color: white;
+  padding: 8px;
+  border-top: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+  border-left: 1px solid #d0d0d0;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e0e0e0;
+  letter-spacing: 0.3px;
+}
+
+.menu-button {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #333;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.menu-button:hover {
+  background-color: #e8e8e8;
+  border-color: #c0c0c0;
+}
+
+.menu-button.active {
+  background-color: #3498db;
+  color: white;
+  border-color: #2980b9;
+  font-weight: 600;
+}
+
+.menu-button.active:hover {
+  background-color: #2980b9;
 }
 
 .blob-container {
@@ -753,7 +877,8 @@ export default defineComponent({
 }
 
 .legend-toggle {
-  grid-area: toggle;
+  grid-area: legend-toggle;
+  grid-row: 2;
   width: 24px;
   height: 100%;
   background-color: #fafafa;

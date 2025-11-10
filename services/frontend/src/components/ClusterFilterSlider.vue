@@ -239,11 +239,11 @@
     color: #4caf50;
   }
   
-  .filter-info {
-    margin-top: 10px;
-    font-size: 14px;
-    color: #666;
-  }
+.filter-info {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
   
   .stats {
     display: flex;

@@ -494,8 +494,9 @@ export default {
 .chart-header h3 {
   margin: 0;
   color: #2c3e50;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .chart-toggle-btn {

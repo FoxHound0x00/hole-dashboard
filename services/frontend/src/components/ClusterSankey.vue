@@ -304,12 +304,17 @@ export default {
         // Calculate total height needed
         const totalNeededHeight = Object.values(initialHeights).reduce((sum, h) => sum + h, 0);
         
-        // Scale down if needed to fit within canvas
-        const scaleFactor = totalNeededHeight > innerHeight ? innerHeight / totalNeededHeight : 1;
+        // Small gap between segments for visual separation
+        const segmentGap = 0.5;
+        const totalGaps = (sortedClusters.length - 1) * segmentGap;
+        const totalHeightWithGaps = totalNeededHeight + totalGaps;
         
-        // Second pass: assign positions with scaled heights
+        // Scale down if needed to fit within canvas
+        const scaleFactor = totalHeightWithGaps > innerHeight ? innerHeight / totalHeightWithGaps : 1;
+        
+        // Second pass: assign positions with scaled heights and gaps
         let currentY = 0;
-        sortedClusters.forEach(cluster => {
+        sortedClusters.forEach((cluster, index) => {
           const height = initialHeights[cluster] * scaleFactor;
           
           clusterPositions[cluster] = {
@@ -318,7 +323,8 @@ export default {
             connections: clusterConnections[stage][cluster]
           };
           
-          currentY += height; // No spacing - stacked bars touch each other
+          // Add gap after each segment except the last one
+          currentY += height + (index < sortedClusters.length - 1 ? segmentGap * scaleFactor : 0);
         });
         
         stageClusterPositions[stage] = clusterPositions;
@@ -346,8 +352,8 @@ export default {
         chart.selectAll('.node')
           .transition()
           .duration(150)
-          .attr('stroke', '#fff')
-          .attr('stroke-width', 1);
+          .attr('stroke', 'none')
+          .attr('stroke-width', 0);
         
         // Reset all flows to normal with transition
         chart.selectAll('.flow')
@@ -493,8 +499,8 @@ export default {
             .attr('width', nodeWidth)
             .attr('height', position.height)
             .attr('fill', colorScale(cluster))
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 1)
+            .attr('stroke', 'none')
+            .attr('stroke-width', 0)
             .attr('rx', 3)
             .style('cursor', 'pointer')
             .datum(originalData) // Store the original data
@@ -527,8 +533,8 @@ export default {
                 chart.selectAll('.node')
                   .transition()
                   .duration(150)
-                  .attr('stroke', '#fff')
-                  .attr('stroke-width', 1);
+                  .attr('stroke', 'none')
+                  .attr('stroke-width', 0);
               }
             })
             .on('click', (event, d) => {
@@ -675,8 +681,8 @@ export default {
             chart.selectAll('.node')
               .transition()
               .duration(150)
-              .attr('stroke', '#fff')
-              .attr('stroke-width', 1);
+              .attr('stroke', 'none')
+              .attr('stroke-width', 0);
           }
         });
       
@@ -727,6 +733,7 @@ export default {
   font-size: 13px;
   color: #333;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .info-stats {

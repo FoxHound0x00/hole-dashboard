@@ -19,7 +19,7 @@ send rasterized heatmap if there's no interactivity.
 
 
 
-
+stacked bar chart is overflowing, and the legend thing is too massive in terms of width
 
 
 ----

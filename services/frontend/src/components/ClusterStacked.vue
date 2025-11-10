@@ -1,5 +1,5 @@
 <template>
-  <div class="stacked-wrapper">
+  <div>
     <div ref="chart" class="chart-container"></div>
     <div class="info-box" ref="infoBox">
       <div v-if="selectedInfo">
@@ -96,10 +96,8 @@ export default {
       
       el.innerHTML = '';
       
-      // Use container dimensions
-      const width = el.clientWidth || 800;
-      const height = el.clientHeight || 500;
-      const margin = { top: 60, right: 160, bottom: 60, left: 60 };
+      const { width, height } = this;
+      const margin = { top: 80, right: 180, bottom: 80, left: 70 };
       const innerWidth = width - margin.left - margin.right;
       const innerHeight = height - margin.top - margin.bottom;
       
@@ -376,7 +374,7 @@ export default {
         .attr('x', innerWidth / 2)
         .attr('y', -50)
         .attr('text-anchor', 'middle')
-        .style('font-size', '14px')
+        .style('font-size', '13px')
         .style('font-weight', '600')
         .style('fill', '#333')
         .text('Cluster Distribution Across Stages');
@@ -445,40 +443,30 @@ export default {
 </script>
 
 <style scoped>
-.stacked-wrapper {
-  height: 100%;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
 
 .chart-container {
   width: 100%;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background-color: #fafafa;
+  min-height: 500px;
+  margin-bottom: 20px;
 }
 
 .info-box {
   width: 100%;
-  flex-shrink: 0;
-  min-height: 70px;
-  max-height: 90px;
+  min-height: 80px;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 8px;
+  border-radius: 5px;
+  padding: 10px;
   background-color: #f9f9f9;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  overflow: auto;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .info-box h3 {
-  margin: 0 0 8px 0;
+  margin-top: 0;
+  margin-bottom: 10px;
   font-size: 13px;
   color: #333;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .info-stats {
