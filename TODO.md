@@ -32,8 +32,3 @@ clip the threshold
 get rid of the fd-layout
 add tsne, mds, to the blob vis
 add contours for blobs
-
-move the label distribution to the tooltips, represent it as a stacked barchart
-
-greyscale for heatmap
-
