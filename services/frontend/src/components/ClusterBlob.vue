@@ -18,6 +18,37 @@
       >
         {{ method.label }}
       </button>
+      
+      <div class="menu-header" style="margin-top: 16px;">Display Mode</div>
+      <div class="toggle-container">
+        <label class="toggle-label">
+          <input 
+            type="checkbox" 
+            v-model="showContours" 
+            @change="createVisualization"
+            class="toggle-checkbox"
+          />
+          <span class="toggle-slider"></span>
+          <span class="toggle-text">{{ showContours ? 'Contours + Outliers' : 'All Points' }}</span>
+        </label>
+      </div>
+      
+      <div class="menu-header" style="margin-top: 16px;">Outlier Threshold</div>
+      <div class="slider-container">
+        <label class="slider-label">
+          <span class="slider-text">Show classes &lt; {{ outlierThreshold }}%</span>
+          <input 
+            type="range" 
+            v-model="outlierThreshold" 
+            @input="createVisualization"
+            min="5"
+            max="50"
+            step="5"
+            class="slider"
+          />
+          <span class="slider-value">{{ outlierThreshold }}%</span>
+        </label>
+      </div>
     </div>
     <div ref="blobContainer" class="blob-container"></div>
     <div class="legend-toggle" @click="legendExpanded = !legendExpanded">
@@ -33,6 +64,7 @@
 <script>
 import { defineComponent, ref, onMounted, watch, onBeforeUnmount } from 'vue';
 import * as d3 from 'd3';
+import { contourDensity } from 'd3-contour';
 
 export default defineComponent({
   name: 'ClusterBlob',
@@ -61,11 +93,13 @@ export default defineComponent({
     const svg = ref(null);
     const width = ref(800);
     const height = ref(600);
-    const pcaData = ref(null);  // Store PCA projections
+    const projectionData = ref(null);  // Store projection data (PCA, t-SNE, LDA, MDS)
     const loading = ref(true);
     const legendExpanded = ref(false);
     const menuExpanded = ref(false);
     const selectedMethod = ref('pca');
+    const showContours = ref(false);
+    const outlierThreshold = ref(20); // Default 20% threshold
     
     // Visualization methods
     const visualizationMethods = [
@@ -77,39 +111,39 @@ export default defineComponent({
     ];
     
     // Select visualization method
-    const selectMethod = (methodId) => {
+    const selectMethod = async (methodId) => {
       selectedMethod.value = methodId;
       emit('visualization-method-selected', methodId);
-      // Placeholder for future implementation
-      console.log(`Selected visualization method: ${methodId}`);
+      
+      // Fetch projection data for the selected method (except 'fd' which uses ForceDirectedGraph)
+      if (methodId !== 'fd') {
+        await fetchProjectionData(methodId);
+        createVisualization();
+      }
     };
     
-    // Extended color scheme for original labels
+    // Extended color scheme for original labels (consistent across all visualizations)
     const originalLabelColors = [
       ...d3.schemeCategory10,
       "#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3", 
       "#fdb462", "#b3de69", "#fccde5", "#d9d9d9", "#bc80bd"
     ];
     
-    // Different color scheme for threshold-based blobs
-    const thresholdBlobColors = [
-      "#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6",
-      "#1abc9c", "#34495e", "#e67e22", "#95a5a6", "#f1c40f",
-      "#8e44ad", "#27ae60", "#2980b9", "#c0392b", "#16a085"
-    ];
-    
-    // Fetch PCA data from backend
-    const fetchPCAData = async () => {
+    // Fetch projection data from backend based on method
+    const fetchProjectionData = async (method) => {
       try {
         loading.value = true;
-        const response = await fetch('http://localhost:5000/pca');
+        const endpoint = method === 'tsne' ? 'tsne' : method; // tsne endpoint is lowercase
+        const response = await fetch(`http://localhost:5000/${endpoint}`);
         const data = await response.json();
         if (data.projection && data.labels) {
-          pcaData.value = data;
+          projectionData.value = data;
+        } else if (data.error) {
+          console.error(`Error fetching ${method} data:`, data.error);
         }
         loading.value = false;
       } catch (error) {
-        console.error('Error fetching PCA data:', error);
+        console.error(`Error fetching ${method} data:`, error);
         loading.value = false;
       }
     };
@@ -142,70 +176,160 @@ export default defineComponent({
       // Group for blob hulls (behind everything)
       const blobGroup = svg.value.append('g').attr('class', 'blobs');
       
-      // Group for links
-      const linkGroup = svg.value.append('g').attr('class', 'links');
-      
       // Group for data points (on top)
       const pointGroup = svg.value.append('g').attr('class', 'points');
       
-      // Create links between points in the same blob
-      const links = [];
-      blobs.forEach(blob => {
-        const blobPoints = dataPoints.filter(point => point.blobId === blob.id);
+      // Draw blob hulls or contours based on mode
+      if (showContours.value) {
+        // CONTOUR MODE: Draw density contours for all points, calculate and show minority class points
+        console.log('=== CONTOUR MODE ===');
+        console.log('Total blobs:', blobs.length);
+        console.log('Total dataPoints:', dataPoints.length);
+        console.log('Outlier threshold:', outlierThreshold.value + '%');
         
-        // Create some connections within each blob
-        for (let i = 0; i < blobPoints.length; i++) {
-          for (let j = i + 1; j < blobPoints.length; j++) {
-            if (Math.random() > 0.7) { // Sparse connections
-              links.push({
-                source: blobPoints[i],
-                target: blobPoints[j],
-                blobId: blob.id
-              });
-            }
-          }
-        }
-      });
-      
-      // Draw links
-      linkGroup.selectAll('line')
-        .data(links)
-        .join('line')
-        .attr('x1', d => d.source.x)
-        .attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x)
-        .attr('y2', d => d.target.y)
-        .attr('stroke', d => {
-          const blob = blobs.find(b => b.id === d.blobId);
-          return thresholdBlobColors[blob.thresholdCluster % thresholdBlobColors.length];
-        })
-        .attr('stroke-opacity', 0.3)
-        .attr('stroke-width', 1);
-      
-      // Draw blob hulls
-      const blobHulls = blobs.map(blob => {
-        const blobPoints = dataPoints.filter(point => point.blobId === blob.id);
-        const points = blobPoints.map(point => [point.x, point.y]);
-        
-        if (points.length < 3) return null; // Need at least 3 points for a hull
-        
-        const hull = d3.polygonHull(points);
-        
-        if (hull) {
-          const paddedHull = padHull(hull, 20);
+        // Calculate minority class points for each blob
+        blobs.forEach(blob => {
+          const blobPoints = dataPoints.filter(point => point.blobId === blob.id);
+          
+          if (blobPoints.length < 3) return;
+          
+          // Calculate class distribution in this blob
+          const labelCounts = {};
+          blobPoints.forEach(point => {
+            labelCounts[point.originalLabel] = (labelCounts[point.originalLabel] || 0) + 1;
+          });
+          
+          const totalPoints = blobPoints.length;
+          
+          // Mark minority class points (classes with < threshold %)
+          blobPoints.forEach(point => {
+            const classCount = labelCounts[point.originalLabel];
+            const classPercentage = (classCount / totalPoints) * 100;
+            point.isMinorityClass = classPercentage < outlierThreshold.value;
+          });
+          
+          // Separate majority and minority points
+          const majorityPoints = blobPoints.filter(p => !p.isMinorityClass);
+          const minorityCount = blobPoints.filter(p => p.isMinorityClass).length;
+          
+          // Find the majority class (most frequent class in this blob)
+          const classCounts = {};
+          blobPoints.forEach(point => {
+            classCounts[point.originalLabel] = (classCounts[point.originalLabel] || 0) + 1;
+          });
+          const majorityClass = Object.entries(classCounts)
+            .reduce((max, [label, count]) => count > max.count ? { label: parseInt(label), count } : max, 
+                    { label: 0, count: 0 }).label;
+          
+          console.log(`Blob ${blob.thresholdCluster}: ${blobPoints.length} total, ${majorityPoints.length} majority (for contours), ${minorityCount} minority (as points), majority class: ${majorityClass}`);
           
           // Check if this blob should be highlighted
           const isSelected = props.selectedCluster !== null && 
                            blob.thresholdCluster.toString() === props.selectedCluster.toString();
           
-          return {
-            blobId: blob.id,
-            blob: blob,
-            element: blobGroup.append('path')
+          // Use majority class color instead of threshold cluster color
+          const color = originalLabelColors[majorityClass % originalLabelColors.length];
+          
+          // Need at least 3 points for contours
+          if (majorityPoints.length < 3) {
+            console.warn(`Blob ${blob.thresholdCluster}: Not enough majority points for contours`);
+            return;
+          }
+          
+          // Create contour density generator for MAJORITY POINTS ONLY (exclude minority)
+          // Use moderate bandwidth to keep contours within the point cloud
+          const densityContours = contourDensity()
+            .x(d => d.x)
+            .y(d => d.y)
+            .size([width.value, height.value])
+            .bandwidth(20) // Smaller bandwidth = tighter contours around actual points
+            .thresholds(10); // Moderate number of contour lines
+          
+          // Generate contours for majority class points only
+          let contours;
+          try {
+            contours = densityContours(majorityPoints);
+          } catch (error) {
+            console.error(`Error generating contours for blob ${blob.thresholdCluster}:`, error);
+            return;
+          }
+          
+          if (!contours || contours.length === 0) return;
+          
+          // Fill the outer contour region - match hull appearance exactly
+          const outerContour = contours[0];
+          blobGroup.append('path')
+            .attr('d', d3.geoPath()(outerContour))
+            .attr('fill', color)
+            .attr('fill-opacity', isSelected ? 0.5 : 0.2) // Match hull exactly
+            .attr('stroke', isSelected ? '#ff6b35' : color) // Match hull stroke
+            .attr('stroke-width', isSelected ? 4 : 2) // Match hull stroke width
+            .attr('stroke-opacity', isSelected ? 1 : 0.6) // Match hull stroke opacity
+            .style('pointer-events', 'all')
+            .style('cursor', 'pointer')
+            .style('filter', isSelected ? 'drop-shadow(0px 4px 8px rgba(255, 107, 53, 0.4))' : 'none') // Match hull filter
+            .on('click', () => {
+              emit('blob-selected', blob);
+            })
+            .on('mouseover', function(event) {
+              d3.select(this)
+                .attr('fill-opacity', isSelected ? 0.6 : 0.4) // Match hull hover
+                .attr('stroke-width', isSelected ? 4 : 3); // Match hull hover
+              showBlobTooltip(event, blob, blobPoints);
+            })
+            .on('mouseout', function() {
+              d3.select(this)
+                .attr('fill-opacity', isSelected ? 0.5 : 0.2) // Match hull
+                .attr('stroke-width', isSelected ? 4 : 2); // Match hull
+              hideBlobTooltip();
+            });
+          
+          // Draw subtle inner contour lines to show density variation
+          contours.slice(1).forEach((contour) => {
+            blobGroup.append('path')
+              .attr('d', d3.geoPath()(contour))
+              .attr('fill', 'none')
+              .attr('stroke', color)
+              .attr('stroke-width', 0.5)
+              .attr('stroke-opacity', 0.3)
+              .attr('stroke-linejoin', 'round')
+              .style('pointer-events', 'none'); // Not interactive, just visual
+          });
+        });
+      } else {
+        // HULL MODE: Draw convex hulls with majority class colors
+        blobs.forEach(blob => {
+          const blobPoints = dataPoints.filter(point => point.blobId === blob.id);
+          const points = blobPoints.map(point => [point.x, point.y]);
+          
+          if (points.length < 3) return null; // Need at least 3 points for a hull
+          
+          const hull = d3.polygonHull(points);
+          
+          if (hull) {
+            const paddedHull = padHull(hull, 20);
+            
+            // Calculate majority class for this blob
+            const classCounts = {};
+            blobPoints.forEach(point => {
+              classCounts[point.originalLabel] = (classCounts[point.originalLabel] || 0) + 1;
+            });
+            const majorityClass = Object.entries(classCounts)
+              .reduce((max, [label, count]) => count > max.count ? { label: parseInt(label), count } : max, 
+                      { label: 0, count: 0 }).label;
+            
+            // Use majority class color
+            const color = originalLabelColors[majorityClass % originalLabelColors.length];
+            
+            // Check if this blob should be highlighted
+            const isSelected = props.selectedCluster !== null && 
+                             blob.thresholdCluster.toString() === props.selectedCluster.toString();
+            
+            blobGroup.append('path')
               .attr('d', `M${paddedHull.join('L')}Z`)
-              .attr('fill', thresholdBlobColors[blob.thresholdCluster % thresholdBlobColors.length])
+              .attr('fill', color)
               .attr('fill-opacity', isSelected ? 0.5 : 0.2)
-              .attr('stroke', isSelected ? '#ff6b35' : thresholdBlobColors[blob.thresholdCluster % thresholdBlobColors.length])
+              .attr('stroke', isSelected ? '#ff6b35' : color)
               .attr('stroke-width', isSelected ? 4 : 2)
               .attr('stroke-opacity', isSelected ? 1 : 0.6)
               .style('cursor', 'pointer')
@@ -213,12 +337,14 @@ export default defineComponent({
               .on('click', () => {
                 emit('blob-selected', blob);
               })
-              .on('mouseover', function() {
+              .on('mouseover', function(event) {
                 if (!isSelected) {
                   d3.select(this)
                     .attr('fill-opacity', 0.4)
                     .attr('stroke-width', 3);
                 }
+                // Show blob tooltip with distribution
+                showBlobTooltip(event, blob, blobPoints);
               })
               .on('mouseout', function() {
                 if (!isSelected) {
@@ -226,30 +352,53 @@ export default defineComponent({
                     .attr('fill-opacity', 0.2)
                     .attr('stroke-width', 2);
                 }
-              })
-          };
-        }
-        return null;
-      }).filter(Boolean);
+                // Hide blob tooltip
+                hideBlobTooltip();
+              });
+          }
+        });
+      }
       
-      // Draw data points
-      const pointCircles = pointGroup.selectAll('circle')
-        .data(dataPoints)
+      // Draw data points - filter based on mode
+      const pointsToShow = showContours.value 
+        ? dataPoints.filter(d => d.isMinorityClass) // Only show minority class points in contour mode
+        : dataPoints; // Show all points in hull mode
+      
+      console.log('=== POINTS RENDERING ===');
+      console.log('Contour mode:', showContours.value);
+      console.log('Total dataPoints:', dataPoints.length);
+      console.log('Minority class points:', dataPoints.filter(d => d.isMinorityClass).length);
+      console.log('Points to show:', pointsToShow.length);
+      
+      // Clear existing points
+      pointGroup.selectAll('circle').remove();
+      
+      // Use consistent styling for all points in both modes
+      const circles = pointGroup.selectAll('circle')
+        .data(pointsToShow)
         .join('circle')
         .attr('cx', d => d.x)
         .attr('cy', d => d.y)
-        .attr('r', d => d.isOutlier ? 3 : 5)
+        .attr('r', d => d.isOutlier ? 3 : 5) // Consistent sizing
         .attr('fill', d => originalLabelColors[d.originalLabel % originalLabelColors.length])
-        .attr('stroke', '#fff')
-        .attr('stroke-width', d => d.isOutlier ? 1 : 1.5)
-        .attr('fill-opacity', d => d.isOutlier ? 0.7 : 1)
+        .attr('stroke', '#fff') // Always white stroke for consistency
+        .attr('stroke-width', d => d.isOutlier ? 1 : 1.5) // Consistent stroke width
+        .attr('fill-opacity', 1) // Always full opacity
         .style('cursor', 'pointer')
+        .style('pointer-events', 'all');
+      
+      console.log('Circles created:', circles.size());
+      
+      // Ensure points are drawn on top of contours/hulls
+      pointGroup.raise();
+      
+      circles
         .on('click', (event, d) => {
           emit('point-selected', d);
         })
         .on('mouseover', function(event, d) {
           d3.select(this)
-            .attr('r', d.isOutlier ? 4 : 7)
+            .attr('r', d.isOutlier ? 4 : 7) // Consistent hover sizing
             .attr('stroke-width', 2);
             
           // Show tooltip or info
@@ -257,52 +406,11 @@ export default defineComponent({
         })
         .on('mouseout', function(event, d) {
           d3.select(this)
-            .attr('r', d.isOutlier ? 3 : 5)
+            .attr('r', d.isOutlier ? 3 : 5) // Back to consistent size
             .attr('stroke-width', d.isOutlier ? 1 : 1.5);
             
           hidePointTooltip();
         });
-      
-      // Create force simulation for interactive behavior
-      const simulation = d3.forceSimulation(dataPoints)
-        .force('x', d3.forceX(d => d.initialX).strength(0.05))
-        .force('y', d3.forceY(d => d.initialY).strength(0.05))
-        .force('collide', d3.forceCollide().radius(d => d.isOutlier ? 4 : 8))
-        .force('link', d3.forceLink(links).id(d => d.id).strength(0.1))
-        .on('tick', () => {
-          // Update point positions
-          pointCircles
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y);
-            
-          // Update link positions
-          linkGroup.selectAll('line')
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-            
-          // Update hull positions
-          updateBlobHulls(blobs, blobHulls, dataPoints);
-        })
-        .alphaDecay(0.02);
-      
-      // Add drag behavior
-      pointCircles.call(d3.drag()
-        .on('start', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        })
-        .on('drag', (event, d) => {
-          d.fx = event.x;
-          d.fy = event.y;
-        })
-        .on('end', (event, d) => {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
-        }));
       
       // Enable zoom and pan
       svg.value.call(d3.zoom()
@@ -312,7 +420,6 @@ export default defineComponent({
         
       function zoomed(event) {
         pointGroup.attr('transform', event.transform);
-        linkGroup.attr('transform', event.transform);
         blobGroup.attr('transform', event.transform);
       }
       
@@ -354,9 +461,9 @@ export default defineComponent({
         });
       });
       
-      // Use PCA projections if available, otherwise fallback to grid layout
-      if (!pcaData.value || !pcaData.value.projection) {
-        console.warn('PCA data not available, using fallback grid layout');
+      // Use projection data if available, otherwise fallback to grid layout
+      if (!projectionData.value || !projectionData.value.projection) {
+        console.warn(`${selectedMethod.value.toUpperCase()} data not available, using fallback grid layout`);
         // Fallback: Create blobs and position data points in grid
         const blobIds = Object.keys(thresholdGroups);
         const gridSize = Math.ceil(Math.sqrt(blobIds.length));
@@ -404,14 +511,14 @@ export default defineComponent({
         return { blobs, dataPoints };
       }
       
-      // USE PCA PROJECTIONS - The correct way!
-      const projection = pcaData.value.projection;
+      // USE PROJECTION DATA - The correct way!
+      const projection = projectionData.value.projection;
       
-      // Find extent of PCA data for scaling
+      // Find extent of projection data for scaling
       const xExtent = d3.extent(projection.map(p => p[0]));
       const yExtent = d3.extent(projection.map(p => p[1]));
       
-      // Create scales to map PCA coordinates to SVG space
+      // Create scales to map projection coordinates to SVG space
       const margin = 50;
       const xScale = d3.scaleLinear()
         .domain(xExtent)
@@ -425,12 +532,12 @@ export default defineComponent({
       blobIds.forEach((thresholdCluster, blobIndex) => {
         const points = thresholdGroups[thresholdCluster];
         
-        // Calculate blob center from PCA positions
+        // Calculate blob center from projection positions
         let centerX = 0, centerY = 0;
         points.forEach(point => {
-          const pcaPos = projection[point.index];
-          centerX += xScale(pcaPos[0]);
-          centerY += yScale(pcaPos[1]);
+          const projPos = projection[point.index];
+          centerX += xScale(projPos[0]);
+          centerY += yScale(projPos[1]);
         });
         centerX /= points.length;
         centerY /= points.length;
@@ -439,16 +546,16 @@ export default defineComponent({
           id: blobIndex,
           thresholdCluster: parseInt(thresholdCluster),
           center: { x: centerX, y: centerY },
-          radius: 50,  // Not used with PCA
+          radius: 50,  // Not used with projections
           pointCount: points.length,
           threshold: thresholdKey
         });
         
-        // Position points using their actual PCA coordinates
+        // Position points using their actual projection coordinates
         points.forEach(point => {
-          const pcaPos = projection[point.index];
-          const x = xScale(pcaPos[0]);
-          const y = yScale(pcaPos[1]);
+          const projPos = projection[point.index];
+          const x = xScale(projPos[0]);
+          const y = yScale(projPos[1]);
           
           dataPoints.push({
             id: `point-${point.index}`,
@@ -467,23 +574,6 @@ export default defineComponent({
       return { blobs, dataPoints };
     };
     
-    // Update blob hulls when points move
-    const updateBlobHulls = (blobs, blobHulls, dataPoints) => {
-      blobs.forEach((blob, i) => {
-        if (blobHulls[i]) {
-          const blobPoints = dataPoints.filter(point => point.blobId === blob.id);
-          const points = blobPoints.map(point => [point.x, point.y]);
-          
-          if (points.length >= 3) {
-            const hull = d3.polygonHull(points);
-            if (hull) {
-              const paddedHull = padHull(hull, 20);
-              blobHulls[i].element.attr('d', `M${paddedHull.join('L')}Z`);
-            }
-          }
-        }
-      });
-    };
     
     // Function to pad hull points outward
     const padHull = (hull, padding) => {
@@ -544,6 +634,98 @@ export default defineComponent({
     // Hide point tooltip
     const hidePointTooltip = () => {
       d3.select('.point-tooltip').style('opacity', 0);
+    };
+    
+    // Show blob tooltip with distribution
+    const showBlobTooltip = (event, blob, blobPoints) => {
+      // Calculate distribution of original labels in this blob
+      const labelCounts = {};
+      blobPoints.forEach(point => {
+        const label = point.originalLabel;
+        labelCounts[label] = (labelCounts[label] || 0) + 1;
+      });
+      
+      // Convert to sorted array of {label, count} objects
+      const labelDistribution = Object.entries(labelCounts)
+        .map(([label, count]) => ({ label: parseInt(label), count }))
+        .sort((a, b) => a.label - b.label);
+      
+      const totalCount = blobPoints.length;
+      
+      // Create or update tooltip
+      let tooltip = d3.select('body').select('.blob-tooltip');
+      if (tooltip.empty()) {
+        tooltip = d3.select('body')
+          .append('div')
+          .attr('class', 'blob-tooltip')
+          .style('position', 'absolute')
+          .style('background', 'rgba(0, 0, 0, 0.9)')
+          .style('color', 'white')
+          .style('padding', '12px')
+          .style('border-radius', '6px')
+          .style('font-size', '12px')
+          .style('pointer-events', 'none')
+          .style('z-index', '1000')
+          .style('max-width', '300px')
+          .style('box-shadow', '0 4px 12px rgba(0, 0, 0, 0.3)');
+      }
+      
+      // Build distribution HTML
+      const distributionHtml = labelDistribution.length > 0
+        ? labelDistribution.map(({ label, count }) => {
+            const percentage = ((count / totalCount) * 100).toFixed(1);
+            return `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span style="display: flex; align-items: center;">
+                <span style="display: inline-block; width: 12px; height: 12px; background: ${originalLabelColors[label % originalLabelColors.length]}; margin-right: 6px; border-radius: 2px;"></span>
+                <span>Label ${label}:</span>
+              </span>
+              <span style="margin-left: 12px; font-weight: 600;">${count} (${percentage}%)</span>
+            </div>`;
+          }).join('')
+        : '<div>No data</div>';
+      
+      // Calculate tooltip position (avoid going off-screen)
+      const tooltipOffset = 15;
+      const tooltipWidth = 300; // max-width
+      const tooltipHeight = 200; // estimated height
+      let left = event.pageX + tooltipOffset;
+      let top = event.pageY - 10;
+      
+      // Adjust if tooltip would go off right edge
+      if (left + tooltipWidth > window.innerWidth) {
+        left = event.pageX - tooltipWidth - tooltipOffset;
+      }
+      
+      // Adjust if tooltip would go off bottom edge
+      if (top + tooltipHeight > window.innerHeight) {
+        top = event.pageY - tooltipHeight - tooltipOffset;
+      }
+      
+      // Ensure tooltip doesn't go off left or top edges
+      left = Math.max(10, left);
+      top = Math.max(10, top);
+      
+      tooltip
+        .html(`
+          <div style="font-weight: bold; font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 6px;">
+            Cluster ${blob.thresholdCluster}
+          </div>
+          <div style="margin-bottom: 8px;">
+            <strong>Total Points:</strong> ${totalCount}
+          </div>
+          <div style="margin-top: 8px;">
+            <div style="font-weight: 600; margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Distribution:</div>
+            ${distributionHtml}
+          </div>
+        `)
+        .style('left', left + 'px')
+        .style('top', top + 'px')
+        .style('opacity', 1);
+    };
+    
+    // Hide blob tooltip
+    const hideBlobTooltip = () => {
+      d3.select('.blob-tooltip').style('opacity', 0);
     };
     
     // Create legend
@@ -616,6 +798,12 @@ export default defineComponent({
         const y = headerHeight + (index * itemHeight);
         const labels = clusterComposition[cluster];
         
+        // Find majority class for this cluster
+        const majorityClass = labels && labels.length > 0
+          ? labels.reduce((max, l) => l.count > max.count ? l : max, { label: 0, count: 0 }).label
+          : 0;
+        const clusterColor = originalLabelColors[majorityClass % originalLabelColors.length];
+        
         // Background for alternating rows
         if (index % 2 === 0) {
           group.append('rect')
@@ -626,13 +814,13 @@ export default defineComponent({
             .attr('fill', '#f9f9f9');
         }
         
-        // Cluster indicator (colored square)
+        // Cluster indicator (colored square) - use majority class color
         group.append('rect')
           .attr('x', 3)
           .attr('y', y + 9)
           .attr('width', 10)
           .attr('height', 10)
-          .attr('fill', thresholdBlobColors[cluster % thresholdBlobColors.length])
+          .attr('fill', clusterColor)
           .attr('stroke', '#fff')
           .attr('stroke-width', 1);
         
@@ -710,14 +898,15 @@ export default defineComponent({
     // Clean up event listeners on unmount
     onBeforeUnmount(() => {
       window.removeEventListener('resize', handleResize);
-      // Clean up tooltip
+      // Clean up tooltips
       d3.select('.point-tooltip').remove();
+      d3.select('.blob-tooltip').remove();
     });
     
     // Initialize on mount
     onMounted(async () => {
       window.addEventListener('resize', handleResize);
-      await fetchPCAData();
+      await fetchProjectionData(selectedMethod.value);
       createVisualization();
     });
     
@@ -733,8 +922,10 @@ export default defineComponent({
     };
 
     // Watch for changes and recreate visualization (debounced)
-    watch([() => props.data, () => props.selectedThreshold, () => props.selectedCluster, () => props.outliers], () => {
-      debouncedCreateVisualization();
+    watch([() => props.data, () => props.selectedThreshold, () => props.selectedCluster, () => props.outliers, () => selectedMethod.value, () => showContours.value], () => {
+      if (selectedMethod.value !== 'fd') {
+        debouncedCreateVisualization();
+      }
     });
     
     return {
@@ -745,7 +936,9 @@ export default defineComponent({
       menuExpanded,
       selectedMethod,
       visualizationMethods,
-      selectMethod
+      selectMethod,
+      showContours,
+      outlierThreshold
     };
   }
 });
@@ -866,6 +1059,120 @@ export default defineComponent({
   background-color: #2980b9;
 }
 
+.toggle-container {
+  padding: 8px 4px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-checkbox {
+  display: none;
+}
+
+.toggle-slider {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  background-color: #ccc;
+  border-radius: 20px;
+  transition: background-color 0.2s ease;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-checkbox:checked + .toggle-slider {
+  background-color: #3498db;
+}
+
+.toggle-checkbox:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-text {
+  font-size: 11px;
+  color: #333;
+  font-weight: 500;
+}
+
+.slider-container {
+  padding: 8px 4px;
+}
+
+.slider-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.slider-text {
+  font-size: 11px;
+  color: #555;
+  font-weight: 500;
+}
+
+.slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #ddd;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3498db;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3498db;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.slider:hover::-webkit-slider-thumb {
+  background: #2980b9;
+}
+
+.slider:hover::-moz-range-thumb {
+  background: #2980b9;
+}
+
+.slider-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3498db;
+  text-align: center;
+}
+
 .blob-container {
   grid-area: blob;
   background-color: white;
@@ -920,7 +1227,8 @@ svg {
 </style>
 
 <style>
-.point-tooltip {
+.point-tooltip,
+.blob-tooltip {
   transition: opacity 0.2s ease;
 }
 </style>

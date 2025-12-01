@@ -48,6 +48,10 @@ export default {
     height: {
       type: Number,
       default: 500
+    },
+    noisyThreshold: {
+      type: Number,
+      default: 5
     }
   },
   emits: ['threshold-selected', 'cluster-selected'],
@@ -66,6 +70,9 @@ export default {
         this.renderChart();
       },
       deep: true
+    },
+    noisyThreshold() {
+      this.renderChart();
     }
   },
   methods: {
@@ -149,6 +156,15 @@ export default {
       // Create color scale
       const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
         .domain(clusters);
+      
+      // Helper function to get color for a cluster segment (gray if noisy/below threshold)
+      const getSegmentColor = (stage, cluster, count) => {
+        // If cluster has fewer datapoints than threshold, use gray
+        if (count < this.noisyThreshold) {
+          return '#999999'; // Gray color for noisy thresholds
+        }
+        return colorScale(cluster);
+      };
       
       // Prepare data for stacking
       const stackData = stages.map(stage => {
@@ -260,9 +276,13 @@ export default {
         .attr('y', d => yScale(d[1]))
         .attr('height', d => yScale(d[0]) - yScale(d[1]))
         .attr('width', xScale.bandwidth())
-        .attr('fill', function() {
+        .attr('fill', function(d) {
           const parentData = d3.select(this.parentNode).datum();
-          return colorScale(parentData.key);
+          const cluster = parentData ? parentData.key : 'Unknown';
+          const stage = d.data.stage;
+          const count = d[1] - d[0];
+          // Use gray if cluster has only 1 datapoint
+          return getSegmentColor(stage, cluster, count);
         })
         .attr('stroke', '#fff')
         .attr('stroke-width', 1)

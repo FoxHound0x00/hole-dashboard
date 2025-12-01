@@ -1,8 +1,32 @@
 <template>
-  <div class="force-directed-graph">
+  <div class="force-directed-graph" :class="{ 'legend-expanded': legendExpanded, 'menu-expanded': menuExpanded }">
     <h3>Cluster Visualization</h3>
+    <div class="menu-toggle" @click="menuExpanded = !menuExpanded">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path v-if="!menuExpanded" d="M5 3l6 5-6 5V3z"/>
+        <path v-else d="M11 3L5 8l6 5V3z"/>
+      </svg>
+    </div>
+    <div class="menu" v-show="menuExpanded">
+      <div class="menu-header">Visualization Method</div>
+      <button 
+        v-for="method in visualizationMethods" 
+        :key="method.id"
+        class="menu-button"
+        :class="{ active: selectedMethod === method.id }"
+        @click="selectMethod(method.id)"
+      >
+        {{ method.label }}
+      </button>
+    </div>
     <div ref="graphContainer" class="graph-container"></div>
-    <!-- <div class="legend" ref="legendContainer"></div> -->
+    <div class="legend-toggle" @click="legendExpanded = !legendExpanded">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <path v-if="!legendExpanded" d="M11 3L5 8l6 5V3z"/>
+        <path v-else d="M5 3l6 5-6 5V3z"/>
+      </svg>
+    </div>
+    <div class="legend" ref="legendContainer" v-show="legendExpanded"></div>
   </div>
 </template>
 
@@ -18,12 +42,31 @@ export default defineComponent({
       required: true
     }
   },
-  setup(props) {
+  emits: ['visualization-method-selected'],
+  setup(props, { emit }) {
     const graphContainer = ref(null);
     const legendContainer = ref(null);
     const svg = ref(null);
     const width = ref(800);
     const height = ref(600);
+    const legendExpanded = ref(false);
+    const menuExpanded = ref(false);
+    const selectedMethod = ref('fd');
+    
+    // Visualization methods
+    const visualizationMethods = [
+      { id: 'pca', label: 'PCA' },
+      { id: 'lda', label: 'LDA' },
+      { id: 'mds', label: 'MDS' },
+      { id: 'tsne', label: 'T-SNE' },
+      { id: 'fd', label: 'FD-graph' }
+    ];
+    
+    // Select visualization method
+    const selectMethod = (methodId) => {
+      selectedMethod.value = methodId;
+      emit('visualization-method-selected', methodId);
+    };
     
     // Extend color scheme to support more clusters
     const extendedColorScheme = [
@@ -584,7 +627,12 @@ export default defineComponent({
     
     return {
       graphContainer,
-      legendContainer
+      legendContainer,
+      legendExpanded,
+      menuExpanded,
+      selectedMethod,
+      visualizationMethods,
+      selectMethod
     };
   }
 });
@@ -592,40 +640,164 @@ export default defineComponent({
 
 <style scoped>
 .force-directed-graph {
-  margin-bottom: 30px;
+  width: 100%;
+  height: 100%;
   background-color: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  display: grid;
+  grid-template-columns: 0px 24px 1fr 24px 0px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    ". title title . ."
+    "menu menu-toggle graph legend-toggle legend";
+  gap: 0;
+  overflow: hidden;
+  position: relative;
+  transition: grid-template-columns 0.3s ease;
+}
+
+.force-directed-graph.legend-expanded {
+  grid-template-columns: 0px 24px 1fr 24px 350px;
+}
+
+.force-directed-graph.menu-expanded {
+  grid-template-columns: 200px 24px 1fr 24px 0px;
+}
+
+.force-directed-graph.menu-expanded.legend-expanded {
+  grid-template-columns: 200px 24px 1fr 24px 350px;
 }
 
 .force-directed-graph h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
+  grid-area: title;
+  margin: 0 0 6px 0;
   font-size: 13px;
-  color: #2c3e50;
+  color: #333;
   font-weight: 600;
   letter-spacing: 0.3px;
 }
 
-.graph-container {
-  width: 100%;
-  height: 500px;
+.menu-toggle {
+  grid-area: menu-toggle;
+  grid-row: 2;
+  width: 24px;
+  height: 100%;
+  background-color: #fafafa;
+  border-top: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+  border-left: 1px solid #d0d0d0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  color: #666;
+}
+
+.menu-toggle:hover {
+  background-color: #e8e8e8;
+  color: #333;
+}
+
+.menu {
+  grid-area: menu;
   background-color: white;
+  padding: 8px;
+  border-top: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+  border-left: 1px solid #d0d0d0;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e0e0e0;
+  letter-spacing: 0.3px;
+}
+
+.menu-button {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
   border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #333;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.menu-button:hover {
+  background-color: #e8e8e8;
+  border-color: #c0c0c0;
+}
+
+.menu-button.active {
+  background-color: #3498db;
+  color: white;
+  border-color: #2980b9;
+  font-weight: 600;
+}
+
+.menu-button.active:hover {
+  background-color: #2980b9;
+}
+
+.graph-container {
+  grid-area: graph;
+  background-color: white;
   overflow: hidden;
-  border: 1px solid #dcdfe6;
-  margin-bottom: 20px;
+  border: 1px solid #d0d0d0;
+  min-height: 0;
+  min-width: 0;
+  margin-right: 0;
+}
+
+.legend-toggle {
+  grid-area: legend-toggle;
+  grid-row: 2;
+  width: 24px;
+  height: 100%;
+  background-color: #fafafa;
+  border-top: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+  border-right: 1px solid #d0d0d0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  color: #666;
+}
+
+.legend-toggle:hover {
+  background-color: #e8e8e8;
+  color: #333;
 }
 
 .legend {
+  grid-area: legend;
   background-color: white;
-  padding: 10px;
-  border-radius: 4px;
-  border: 1px solid #dcdfe6;
-  max-height: 150px;
-  overflow-y: auto;
+  padding: 8px;
+  border-top: 1px solid #d0d0d0;
+  border-bottom: 1px solid #d0d0d0;
+  border-right: 1px solid #d0d0d0;
+  overflow: hidden;
+  font-size: 10px;
+  min-height: 0;
+  margin-left: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 svg {

@@ -18,6 +18,7 @@
       <ClusterSelectorSlider 
         :deathData="deathData"
         :availableStages="availableStages"
+        :noisyThreshold="noisyThreshold"
         @update:selected-stages="updateSelectedStages"
         @update:selected-clusters="updateSelectedClusters"
       />
@@ -26,6 +27,22 @@
         :cluster-data="filteredClusterData" 
         @update:filtered-data="updateClusterSizeFiltered"
       />
+      
+      <!-- Noisy Threshold Control -->
+      <div class="noisy-threshold-control">
+        <h3>Noisy Threshold:</h3>
+        <div class="threshold-input-container">
+          <input 
+            type="number" 
+            v-model.number="noisyThreshold"
+            min="1"
+            max="50"
+            class="threshold-input"
+          />
+          <span class="threshold-label">datapoints</span>
+        </div>
+        <p class="threshold-help">Clusters with fewer than {{ noisyThreshold }} datapoints will appear gray</p>
+      </div>
     </div>
     
     <!-- Top Right: Main Visualization (Sankey/Stacked) -->
@@ -44,6 +61,7 @@
       <ClusterSankey 
         v-if="chartType === 'sankey'"
         :data="sizeFilteredClusterData" 
+        :noisyThreshold="noisyThreshold"
         @threshold-selected="handleThresholdSelection"
         @cluster-selected="handleClusterSelection"
       />
@@ -51,6 +69,7 @@
       <ClusterStacked 
         v-if="chartType === 'stacked'"
         :data="sizeFilteredClusterData" 
+        :noisyThreshold="noisyThreshold"
         @threshold-selected="handleThresholdSelection"
         @cluster-selected="handleClusterSelection"
       />
@@ -59,12 +78,19 @@
     <!-- Bottom Left: Blob Visualization -->
     <div class="blob-viz">
       <ClusterBlob 
+        v-if="visualizationMethod !== 'fd'"
         :data="sizeFilteredClusterData" 
         :selected-threshold="selectedThreshold"
         :selected-cluster="selectedCluster"
         :outliers="[]"
         @blob-selected="handleBlobSelection"
         @point-selected="handlePointSelection"
+        @visualization-method-selected="handleVisualizationMethodSelected"
+      />
+      <ForceDirectedGraph 
+        v-if="visualizationMethod === 'fd'"
+        :data="sizeFilteredClusterData"
+        @visualization-method-selected="handleVisualizationMethodSelected"
       />
     </div>
 
@@ -85,6 +111,7 @@ import ClusterStacked from './components/ClusterStacked.vue';
 import ClusterFilterSlider from './components/ClusterFilterSlider.vue';
 import ClusterSelectorSlider from './components/ClusterSelectorSlider.vue';
 import ClusterBlob from './components/ClusterBlob.vue';
+import ForceDirectedGraph from './components/ForceDirectedGraph.vue';
 import HeatmapDendrogram from './components/HeatmapDendrogram.vue';
 import axios from 'axios';
 import * as d3 from 'd3';
@@ -97,6 +124,7 @@ export default {
     ClusterFilterSlider,
     ClusterSelectorSlider,
     ClusterBlob,
+    ForceDirectedGraph,
     HeatmapDendrogram
   },
   data() {
@@ -113,7 +141,9 @@ export default {
       brushChart: null,
       chartType: 'sankey',
       selectedThreshold: null,
-      selectedCluster: null
+      selectedCluster: null,
+      noisyThreshold: 5,
+      visualizationMethod: 'pca'
     };
   },
   created() {
@@ -243,6 +273,11 @@ export default {
     handlePointSelection(point) {
       console.log('Selected point:', point);
       // You can add additional logic here to handle point selection
+    },
+    // Handle visualization method selection from ClusterBlob component
+    handleVisualizationMethodSelected(method) {
+      this.visualizationMethod = method;
+      console.log('Selected visualization method:', method);
     },
     // Initialize the brush chart
     initializeBrushChart() {
@@ -465,10 +500,59 @@ export default {
 .sidebar {
   grid-area: sidebar;
   display: grid;
-  grid-template-rows: 2fr 1fr;
+  grid-template-rows: 2fr 1fr auto;
   gap: 8px;
   overflow: hidden;
   min-height: 0;
+}
+
+.noisy-threshold-control {
+  background-color: #f8f9fa;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.noisy-threshold-control h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #333;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.threshold-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.threshold-input {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.threshold-input:focus {
+  outline: none;
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+.threshold-label {
+  font-size: 12px;
+  color: #666;
+}
+
+.threshold-help {
+  margin: 0;
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
 }
 
 /* Main Visualization Area */

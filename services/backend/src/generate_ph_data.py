@@ -19,6 +19,8 @@ sys.path.insert(0, '/home/sud/Documents/repos/hole-dashboard/services/backend/ho
 import numpy as np
 from sklearn.datasets import make_blobs
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE, MDS
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 import hole
 from hole.core import distance_metrics
 from hole.visualization.cluster_flow import ClusterFlowAnalyzer
@@ -149,24 +151,59 @@ for metric_key, dist_matrix in computed_distance_matrices.items():
     print(f"   ✓ Saved {npy_filename}: {dist_matrix.shape}")
 
 # ============================================================================
-# 5. COMPUTE AND SAVE PCA PROJECTIONS
+# 5. COMPUTE AND SAVE DIMENSIONALITY REDUCTION PROJECTIONS
 # ============================================================================
-print("\n[5/6] Computing and saving PCA projections...")
+print("\n[5/7] Computing and saving dimensionality reduction projections...")
 
 # Compute PCA (reduce to 2D for visualization)
-pca = PCA(n_components=2)
+print("   Computing PCA...")
+pca = PCA(n_components=2, random_state=42)
 pca_projection = pca.fit_transform(points)
-
 pca_filename = "pca.npy"
 pca_path = os.path.join(output_dir, pca_filename)
 np.save(pca_path, pca_projection)
 print(f"   ✓ Saved {pca_filename}: {pca_projection.shape}")
 print(f"   ✓ Explained variance: {pca.explained_variance_ratio_}")
 
+# Compute t-SNE (reduce to 2D for visualization)
+print("   Computing t-SNE...")
+perplexity = min(30, (n_samples - 1) // 3)
+perplexity = max(5, perplexity)  # Ensure minimum perplexity
+tsne = TSNE(n_components=2, random_state=42, perplexity=perplexity, max_iter=1000)
+tsne_projection = tsne.fit_transform(points)
+tsne_filename = "tsne.npy"
+tsne_path = os.path.join(output_dir, tsne_filename)
+np.save(tsne_path, tsne_projection)
+print(f"   ✓ Saved {tsne_filename}: {tsne_projection.shape}")
+
+# Compute MDS (reduce to 2D for visualization)
+print("   Computing MDS...")
+mds = MDS(n_components=2, random_state=42, n_init=4, max_iter=1000)
+mds_projection = mds.fit_transform(points)
+mds_filename = "mds.npy"
+mds_path = os.path.join(output_dir, mds_filename)
+np.save(mds_path, mds_projection)
+print(f"   ✓ Saved {mds_filename}: {mds_projection.shape}")
+
+# Compute LDA (reduce to 2D for visualization)
+# LDA requires labels, so we use true_labels
+print("   Computing LDA...")
+n_classes = len(np.unique(true_labels))
+n_components = min(2, n_classes - 1)  # LDA can have at most n_classes - 1 components
+if n_components >= 1:
+    lda = LinearDiscriminantAnalysis(n_components=n_components)
+    lda_projection = lda.fit_transform(points, true_labels)
+    lda_filename = "lda.npy"
+    lda_path = os.path.join(output_dir, lda_filename)
+    np.save(lda_path, lda_projection)
+    print(f"   ✓ Saved {lda_filename}: {lda_projection.shape}")
+else:
+    print("   ⚠ Skipping LDA: insufficient classes for 2D projection")
+
 # ============================================================================
 # 6. SAVE ALL DATA AS JSON
 # ============================================================================
-print("\n[6/6] Saving data to JSON files...")
+print("\n[6/7] Saving data to JSON files...")
 
 # Save persistent homology cluster labels
 ph_labels_file = os.path.join(output_dir, "ph_data_all_syn.json")
@@ -205,6 +242,9 @@ print(f"    • dist_maha_dist.npy - Mahalanobis distance matrix")
 print(f"    • dist_density_euclid.npy - Density-normalized Euclidean")
 print(f"    • dist_density_maha.npy - Density-normalized Mahalanobis")
 print(f"    • pca.npy - PCA projection (2D)")
+print(f"    • tsne.npy - t-SNE projection (2D)")
+print(f"    • mds.npy - MDS projection (2D)")
+print(f"    • lda.npy - LDA projection (2D)")
 print("\nMetrics included:")
 for metric_key in ph_data_all.keys():
     num_thresholds = len(ph_data_all[metric_key]) - 1  # -1 for Original Labels

@@ -84,3 +84,66 @@ async def get_pca():
         return {"error": "PCA projection not found"}
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/tsne")
+async def get_tsne():
+    try:
+        # Load t-SNE projection from .npy file
+        tsne_path = "data/tsne.npy"
+        if os.path.exists(tsne_path):
+            tsne_projection = np.load(tsne_path)
+            
+            # Also load the true labels for visualization
+            with open("data/point_cloud_data.json", "r") as f:
+                point_data = json.load(f)
+                labels = point_data["true_labels"]
+            
+            return {
+                "projection": tsne_projection.tolist(),
+                "labels": labels
+            }
+        return {"error": "t-SNE projection not found"}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/mds")
+async def get_mds():
+    try:
+        # Load MDS projection from .npy file
+        mds_path = "data/mds.npy"
+        if os.path.exists(mds_path):
+            mds_projection = np.load(mds_path)
+            
+            # Also load the true labels for visualization
+            with open("data/point_cloud_data.json", "r") as f:
+                point_data = json.load(f)
+                labels = point_data["true_labels"]
+            
+            return {
+                "projection": mds_projection.tolist(),
+                "labels": labels
+            }
+        return {"error": "MDS projection not found"}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/lda")
+async def get_lda():
+    try:
+        # Load LDA projection from .npy file
+        lda_path = "data/lda.npy"
+        if os.path.exists(lda_path):
+            lda_projection = np.load(lda_path)
+            
+            # Also load the true labels for visualization
+            with open("data/point_cloud_data.json", "r") as f:
+                point_data = json.load(f)
+                labels = point_data["true_labels"]
+            
+            return {
+                "projection": lda_projection.tolist(),
+                "labels": labels
+            }
+        return {"error": "LDA projection not found"}
+    except Exception as e:
+        return {"error": str(e)}

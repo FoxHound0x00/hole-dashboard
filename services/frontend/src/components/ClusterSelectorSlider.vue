@@ -19,6 +19,10 @@ export default defineComponent({
     availableStages: {
       type: Array,
       default: () => []
+    },
+    noisyThreshold: {
+      type: Number,
+      default: 5
     }
   },
   emits: ['update:selected-clusters', 'update:selected-stages'],
@@ -121,9 +125,26 @@ export default defineComponent({
         .enter()
         .append('path')
         .attr('d', area)
-        .attr('fill', d => color(d.key))
+        .attr('fill', seriesData => {
+          // Check if cluster count is below noisy threshold at any point
+          // seriesData is the series array for this cluster, each element has data[seriesData.key] as the count
+          const clusterKey = seriesData.key;
+          const maxCount = d3.max(seriesData, point => point.data[clusterKey] || 0);
+          if (maxCount < props.noisyThreshold) {
+            return '#999999'; // Gray for noisy thresholds
+          }
+          return color(clusterKey);
+        })
         .attr('opacity', 0.7)
-        .attr('stroke', d => color(d.key))
+        .attr('stroke', seriesData => {
+          // Check if cluster count is below noisy threshold at any point
+          const clusterKey = seriesData.key;
+          const maxCount = d3.max(seriesData, point => point.data[clusterKey] || 0);
+          if (maxCount < props.noisyThreshold) {
+            return '#999999'; // Gray for noisy thresholds
+          }
+          return color(clusterKey);
+        })
         .attr('stroke-width', 0.5)
 
 
@@ -250,6 +271,7 @@ export default defineComponent({
 
         
         // Legend color squares - only original labels
+        // Note: Legend colors don't reflect noisy threshold since they show original labels
         legend.selectAll('rect.legend-color')
           .data(originalLabels)
           .enter()
@@ -288,6 +310,7 @@ export default defineComponent({
         selectedStages.value = [...newStages]
       }
     })
+    watch(() => props.noisyThreshold, createChart)
 
     return { chartContainer }
   }

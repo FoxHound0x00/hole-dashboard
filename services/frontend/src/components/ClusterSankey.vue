@@ -48,6 +48,10 @@ export default {
     height: {
       type: Number,
       default: 500
+    },
+    noisyThreshold: {
+      type: Number,
+      default: 5
     }
   },
   emits: ['threshold-selected', 'cluster-selected'],
@@ -66,6 +70,9 @@ export default {
         this.renderChart();
       },
       deep: true
+    },
+    noisyThreshold() {
+      this.renderChart();
     }
   },
   methods: {
@@ -153,9 +160,49 @@ export default {
         return a.localeCompare(b);
       });
       
-      // Create color scale
-      const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
-        .domain(clusters);
+      // Extended color scheme for original labels (consistent with ClusterBlob)
+      const originalLabelColors = [
+        ...d3.schemeCategory10,
+        "#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3", 
+        "#fdb462", "#b3de69", "#fccde5", "#d9d9d9", "#bc80bd"
+      ];
+      
+      // Calculate majority class for each cluster in each stage
+      const clusterMajorityClass = {};
+      if (this.data['Original Labels']) {
+        stages.forEach(stage => {
+          if (!clusterMajorityClass[stage]) clusterMajorityClass[stage] = {};
+          
+          const stageData = this.data[stage];
+          const originalLabels = this.data['Original Labels'];
+          
+          if (Array.isArray(stageData) && Array.isArray(originalLabels)) {
+            clusters.forEach(cluster => {
+              // Find all indices where this cluster appears in this stage
+              const classCount = {};
+              stageData.forEach((clusterValue, idx) => {
+                if (clusterValue === cluster) {
+                  const originalLabel = originalLabels[idx];
+                  classCount[originalLabel] = (classCount[originalLabel] || 0) + 1;
+                }
+              });
+              
+              // Find majority class
+              const majorityClass = Object.entries(classCount)
+                .reduce((max, [label, count]) => count > max.count ? { label: parseInt(label), count } : max, 
+                        { label: 0, count: 0 }).label;
+              
+              clusterMajorityClass[stage][cluster] = majorityClass;
+            });
+          }
+        });
+      }
+      
+      // Create color scale based on majority class
+      const colorScale = (cluster, stage) => {
+        const majorityClass = clusterMajorityClass[stage]?.[cluster] ?? 0;
+        return originalLabelColors[majorityClass % originalLabelColors.length];
+      };
       
       // Create x scale for stages
       const xScale = d3.scalePoint()
@@ -492,13 +539,16 @@ export default {
           };
           
           // Draw rectangle
+          const clusterCount = stageData[stage][cluster];
+          const isNoisy = clusterCount < this.noisyThreshold;
+          
           chart.append('rect')
             .attr('class', nodeClassName)
             .attr('x', stageX - nodeWidth/2)
             .attr('y', position.y)
             .attr('width', nodeWidth)
             .attr('height', position.height)
-            .attr('fill', colorScale(cluster))
+            .attr('fill', isNoisy ? '#999999' : colorScale(cluster, stage))
             .attr('stroke', 'none')
             .attr('stroke-width', 0)
             .attr('rx', 3)
@@ -617,7 +667,14 @@ export default {
         .append('path')
         .attr('d', linkGenerator)
         .attr('fill', 'none')
-        .attr('stroke', d => colorScale(d.sourceCluster))
+        .attr('stroke', d => {
+          // Check if source cluster is noisy (below threshold)
+          const sourceCount = stageData[d.sourceStage] && stageData[d.sourceStage][d.sourceCluster] ? stageData[d.sourceStage][d.sourceCluster] : 0;
+          if (sourceCount < this.noisyThreshold) {
+            return '#999999'; // Gray for noisy thresholds
+          }
+          return colorScale(d.sourceCluster, d.sourceStage);
+        })
         .attr('stroke-width', d => lineWidthScale(d.count))
         .attr('stroke-opacity', 0.4)
         .each(function(d) {
