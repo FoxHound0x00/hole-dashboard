@@ -100,6 +100,7 @@
         v-if="selectedOptions['Distance Metric']"
         :metric="selectedOptions['Distance Metric']"
         :cluster-data="rawClusterData"
+        :selected-threshold="selectedThreshold"
       />
     </div>
   </div>

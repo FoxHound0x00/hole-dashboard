@@ -25,6 +25,10 @@ export default {
     clusterData: {
       type: Object,
       default: () => ({})
+    },
+    selectedThreshold: {
+      type: String,
+      default: null
     }
   },
   data() {
@@ -33,7 +37,13 @@ export default {
       loading: false,
       error: null,
       heatmapColorScale: null,
-      fetchTimeout: null
+      fetchTimeout: null,
+      renderTimeout: null,
+      svg: null,
+      dendrogramGroup: null,
+      xScale: null,
+      margin: null,
+      height: null
     };
   },
   watch: {
@@ -46,7 +56,25 @@ export default {
         }
         this.fetchTimeout = setTimeout(() => {
           this.fetchDistanceMatrix();
-        }, 150);
+        }, 300);
+      }
+    },
+    selectedThreshold: {
+      handler() {
+        // Only re-render threshold line, not entire visualization
+        this.updateThresholdLine();
+      }
+    },
+    clusterData: {
+      deep: true,
+      handler() {
+        // Debounce cluster data changes
+        if (this.renderTimeout) {
+          clearTimeout(this.renderTimeout);
+        }
+        this.renderTimeout = setTimeout(() => {
+          this.renderVisualization();
+        }, 300);
       }
     }
   },
@@ -100,25 +128,25 @@ export default {
         const containerWidth = container.clientWidth || 1000;
         
         // Dimensions - make both dendrogram and heatmap square
-        const margin = { top: 50, right: 20, bottom: 50, left: 150 };
+        this.margin = { top: 50, right: 20, bottom: 50, left: 150 };
         const legendWidth = 80;
         
         // Calculate square size based on available space
-        const availableWidth = containerWidth - margin.left - margin.right - legendWidth;
+        const availableWidth = containerWidth - this.margin.left - this.margin.right - legendWidth;
         const squareSize = Math.min(500, availableWidth / 2); // Fit both squares
         
         const dendrogramWidth = squareSize;
         const heatmapWidth = squareSize;
-        const height = squareSize + margin.top + margin.bottom;
+        this.height = squareSize + this.margin.top + this.margin.bottom;
         
-        const totalWidth = margin.left + dendrogramWidth + heatmapWidth + legendWidth + margin.right;
+        const totalWidth = this.margin.left + dendrogramWidth + heatmapWidth + legendWidth + this.margin.right;
         
         // Create SVG
-        const svg = d3.select(container)
+        this.svg = d3.select(container)
           .append('svg')
           .attr('width', totalWidth)
-          .attr('height', height)
-          .attr('viewBox', [0, 0, totalWidth, height])
+          .attr('height', this.height)
+          .attr('viewBox', [0, 0, totalWidth, this.height])
           .attr('style', 'max-width: 100%; height: auto;');
         
         // Create hierarchical clustering using distance matrix
@@ -132,17 +160,27 @@ export default {
         const reorderedMatrix = this.reorderMatrix(this.distanceMatrix, leafOrder);
         
         // Get cluster labels from the data
-        const clusterLabels = this.getClusterLabels(leafOrder);
+        const originalLabels = this.getClusterLabels(leafOrder);
         
-        // Render dendrogram
-        this.renderDendrogram(svg, clustering, margin, dendrogramWidth, height, n, clusterLabels);
+        // Get threshold-based cluster assignments if available
+        const thresholdClusters = this.getThresholdClusters(leafOrder);
+        
+        // Render dendrogram and store xScale
+        this.xScale = this.renderDendrogram(this.svg, clustering, this.margin, dendrogramWidth, this.height, n, originalLabels, thresholdClusters);
         
         // Render heatmap
-        this.renderHeatmap(svg, reorderedMatrix, margin, dendrogramWidth, heatmapWidth, height, leafOrder);
+        this.renderHeatmap(this.svg, reorderedMatrix, this.margin, dendrogramWidth, heatmapWidth, this.height, leafOrder);
         
         // Add color legend (completely to the right of heatmap)
-        const legendX = margin.left + dendrogramWidth + heatmapWidth + 40;
-        this.addColorLegend(svg, this.heatmapColorScale, margin, legendX, height);
+        const legendX = this.margin.left + dendrogramWidth + heatmapWidth + 40;
+        this.addColorLegend(this.svg, this.heatmapColorScale, this.margin, legendX, this.height);
+        
+        // Draw threshold line if one is selected
+        if (this.selectedThreshold) {
+          this.$nextTick(() => {
+            this.updateThresholdLine();
+          });
+        }
       } catch (error) {
         console.error('Error rendering visualization:', error);
         this.error = 'Error rendering visualization: ' + error.message;
@@ -316,6 +354,16 @@ export default {
       return order.map(idx => originalLabels[idx]);
     },
     
+    getThresholdClusters(order) {
+      // Get threshold-based cluster assignments
+      if (!this.clusterData || !this.selectedThreshold || !this.clusterData[this.selectedThreshold]) {
+        return null;
+      }
+      
+      const thresholdClusters = this.clusterData[this.selectedThreshold];
+      return order.map(idx => thresholdClusters[idx]);
+    },
+    
     reorderMatrix(matrix, order) {
       const n = order.length;
       const reordered = [];
@@ -330,9 +378,11 @@ export default {
       return reordered;
     },
     
-    renderDendrogram(svg, root, margin, width, height, n, clusterLabels) {
-      const dendrogramGroup = svg.append('g')
+    renderDendrogram(svg, root, margin, width, height, n, originalLabels, thresholdClusters) {
+      this.dendrogramGroup = svg.append('g')
         .attr('transform', `translate(${margin.left}, ${margin.top})`);
+      
+      const dendrogramGroup = this.dendrogramGroup;
       
       // Calculate y positions for leaves
       const yScale = d3.scaleLinear()
@@ -341,9 +391,17 @@ export default {
       
       // Calculate x scale for dendrogram (based on height/distance)
       const maxHeight = root.height;
+      
+      console.log('Dendrogram maxHeight:', maxHeight);
+      
+      // Standard dendrogram layout: leaves on right (high x), root on left (low x)
+      // Domain: 0 (leaves) to maxHeight (root)
+      // Range: width (leaves) to 0 (root)
       const xScale = d3.scaleLinear()
         .domain([0, maxHeight])
         .range([width, 0]);
+      
+      console.log('xScale domain:', xScale.domain(), 'range:', xScale.range());
       
       // Assign y positions to all nodes
       const leafPositions = {};
@@ -365,12 +423,51 @@ export default {
       
       assignPositions(root);
       
+      // Extended color scheme for original labels (consistent with ClusterBlob and Sankey)
+      const originalLabelColors = [
+        ...d3.schemeCategory10,
+        "#8dd3c7", "#ffffb3", "#bebada", "#fb8072", "#80b1d3", 
+        "#fdb462", "#b3de69", "#fccde5", "#d9d9d9", "#bc80bd"
+      ];
+      
+      // Use threshold clusters if available, otherwise use original labels
+      const labelsToUse = thresholdClusters || originalLabels;
+      
+      // If using threshold clusters, calculate majority class for each cluster
+      let clusterColors = {};
+      if (thresholdClusters) {
+        // Group by threshold cluster and find majority original label
+        const clusterComposition = {};
+        thresholdClusters.forEach((cluster, idx) => {
+          if (!clusterComposition[cluster]) {
+            clusterComposition[cluster] = {};
+          }
+          const originalLabel = originalLabels[idx];
+          clusterComposition[cluster][originalLabel] = (clusterComposition[cluster][originalLabel] || 0) + 1;
+        });
+        
+        // Find majority class for each threshold cluster
+        Object.keys(clusterComposition).forEach(cluster => {
+          const counts = clusterComposition[cluster];
+          const majorityLabel = Object.entries(counts)
+            .reduce((max, [label, count]) => count > max.count ? { label: parseInt(label), count } : max,
+                    { label: 0, count: 0 }).label;
+          clusterColors[cluster] = originalLabelColors[majorityLabel % originalLabelColors.length];
+        });
+      } else {
+        // Direct mapping of original labels to colors
+        const uniqueLabels = [...new Set(originalLabels)];
+        uniqueLabels.forEach(label => {
+          clusterColors[label] = originalLabelColors[label % originalLabelColors.length];
+        });
+      }
+      
       // Assign cluster labels to each node based on its leaves
       let clusterIndex = 0;
       function assignClusterToNode(node) {
         if (!node.left && !node.right) {
           // Leaf node - get its cluster label
-          node.cluster = clusterLabels[clusterIndex];
+          node.cluster = labelsToUse[clusterIndex];
           clusterIndex++;
         } else {
           // Internal node - recursively process children
@@ -384,11 +481,8 @@ export default {
       
       assignClusterToNode(root);
       
-      // Create color scale for clusters (categorical)
-      const uniqueClusters = [...new Set(clusterLabels)];
-      const clusterColorScale = d3.scaleOrdinal()
-        .domain(uniqueClusters)
-        .range(d3.schemeCategory10);
+      // Create color scale function
+      const clusterColorScale = (cluster) => clusterColors[cluster] || '#999';
       
       // Draw dendrogram links
       function drawLinks(node) {
@@ -433,11 +527,90 @@ export default {
       
       drawLinks(root);
       
-      // Add axis
-      const xAxis = d3.axisTop(xScale).ticks(5);
-      dendrogramGroup.append('g')
-        .attr('transform', 'translate(0, -5)')
+      // Threshold line will be drawn via updateThresholdLine() method after initial render
+      
+      // Create axis with regular ticks (not threshold-based)
+      const xAxis = d3.axisTop(xScale)
+        .ticks(6)
+        .tickFormat(d => {
+          // Remove NaN, format numbers properly, and ensure clean values
+          if (isNaN(d) || d === null || d === undefined) return '';
+          // Round to avoid floating point issues
+          return Number(d.toFixed(1));
+        });
+      
+      const axisGroup = dendrogramGroup.append('g')
+        .attr('transform', 'translate(0, 0)')
         .call(xAxis);
+      
+      // Style axis
+      axisGroup.selectAll('text')
+        .attr('font-size', '10px')
+        .attr('fill', '#555');
+      
+      // Remove any NaN or invalid tick marks
+      axisGroup.selectAll('.tick').filter(function() {
+        const text = d3.select(this).select('text').text();
+        return text === '' || text === 'NaN' || text === 'null';
+      }).remove();
+      
+      // Return xScale for threshold line updates
+      return xScale;
+    },
+    
+    updateThresholdLine() {
+      // Fast update - only redraw threshold line without re-rendering entire dendrogram
+      if (!this.dendrogramGroup || !this.xScale || !this.selectedThreshold) {
+        return;
+      }
+      
+      // Remove existing threshold line and label
+      this.dendrogramGroup.selectAll('.threshold-line, .threshold-label, .threshold-label-bg').remove();
+      
+      // Parse threshold value - it should be a numeric string like "8.867"
+      const thresholdValue = parseFloat(this.selectedThreshold);
+      if (isNaN(thresholdValue)) {
+        console.warn('Invalid threshold value:', this.selectedThreshold);
+        return;
+      }
+      
+      const thresholdX = this.xScale(thresholdValue);
+      
+      // Draw vertical dotted line at threshold
+      this.dendrogramGroup.append('line')
+        .attr('class', 'threshold-line')
+        .attr('x1', thresholdX)
+        .attr('y1', 0)
+        .attr('x2', thresholdX)
+        .attr('y2', this.height - this.margin.top - this.margin.bottom)
+        .attr('stroke', '#ff6b35')
+        .attr('stroke-width', 3)
+        .attr('stroke-dasharray', '5,5')
+        .attr('opacity', 0.9);
+      
+      // Add label background
+      const text = this.dendrogramGroup.append('text')
+        .attr('class', 'threshold-label')
+        .attr('x', thresholdX)
+        .attr('y', -15)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '11px')
+        .attr('font-weight', 'bold')
+        .attr('fill', '#ff6b35')
+        .text(this.selectedThreshold);
+      
+      // Add white background
+      const bbox = text.node()?.getBBox();
+      if (bbox) {
+        this.dendrogramGroup.insert('rect', '.threshold-label')
+          .attr('class', 'threshold-label-bg')
+          .attr('x', bbox.x - 2)
+          .attr('y', bbox.y - 1)
+          .attr('width', bbox.width + 4)
+          .attr('height', bbox.height + 2)
+          .attr('fill', 'white')
+          .attr('opacity', 0.9);
+      }
     },
     
     renderHeatmap(svg, matrix, margin, dendrogramWidth, width, height, order) {

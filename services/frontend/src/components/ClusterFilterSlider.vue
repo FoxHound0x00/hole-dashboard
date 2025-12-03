@@ -69,8 +69,7 @@
         }
         
         // For each stage, find the maximum count for any cluster
-        Object.entries(this.clusterData).forEach(([stageName, clusterIds]) => {
-          console.log("Not removing this since it'll trigger an error -- Stage Name: " + stageName)
+        Object.entries(this.clusterData).forEach(([, clusterIds]) => {
           const counts = this.getCounts(clusterIds);
           const stageMax = Math.max(...Object.values(counts));
           if (stageMax > max) {

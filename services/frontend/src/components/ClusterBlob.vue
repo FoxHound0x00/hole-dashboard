@@ -364,12 +364,6 @@ export default defineComponent({
         ? dataPoints.filter(d => d.isMinorityClass) // Only show minority class points in contour mode
         : dataPoints; // Show all points in hull mode
       
-      console.log('=== POINTS RENDERING ===');
-      console.log('Contour mode:', showContours.value);
-      console.log('Total dataPoints:', dataPoints.length);
-      console.log('Minority class points:', dataPoints.filter(d => d.isMinorityClass).length);
-      console.log('Points to show:', pointsToShow.length);
-      
       // Clear existing points
       pointGroup.selectAll('circle').remove();
       
@@ -386,8 +380,6 @@ export default defineComponent({
         .attr('fill-opacity', 1) // Always full opacity
         .style('cursor', 'pointer')
         .style('pointer-events', 'all');
-      
-      console.log('Circles created:', circles.size());
       
       // Ensure points are drawn on top of contours/hulls
       pointGroup.raise();
@@ -918,13 +910,21 @@ export default defineComponent({
       }
       visualizationTimeout = setTimeout(() => {
         createVisualization();
-      }, 100); // 100ms debounce
+      }, 150); // Increased debounce for better performance
     };
 
     // Watch for changes and recreate visualization (debounced)
-    watch([() => props.data, () => props.selectedThreshold, () => props.selectedCluster, () => props.outliers, () => selectedMethod.value, () => showContours.value], () => {
+    // Separate watches to avoid unnecessary re-renders
+    watch([() => props.data, () => props.selectedThreshold, () => props.selectedCluster], () => {
       if (selectedMethod.value !== 'fd') {
         debouncedCreateVisualization();
+      }
+    }, { deep: false }); // Shallow watch for better performance
+    
+    // Separate watch for mode toggle
+    watch(showContours, () => {
+      if (selectedMethod.value !== 'fd') {
+        createVisualization(); // Immediate update for toggle
       }
     });
     

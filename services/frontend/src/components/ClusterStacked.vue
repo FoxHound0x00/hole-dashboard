@@ -224,7 +224,10 @@ export default {
         .attr('fill', d => self.selectedThreshold === d ? '#e74c3c' : '#333')
         .style('cursor', 'pointer')
         .style('transition', 'all 0.2s ease')
-        .text(d => d)
+        .text(d => {
+          const num = parseFloat(d);
+          return isNaN(num) ? d : num.toFixed(3);
+        })
         .on('mouseover', function(event, d) {
           if (d !== self.selectedThreshold) {
             d3.select(this)

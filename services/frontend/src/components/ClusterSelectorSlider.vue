@@ -154,9 +154,11 @@ export default defineComponent({
         // .call(d3.axisBottom(x).ticks(Math.min(5, reorderedData.length))
         .call(d3.axisBottom(x).ticks(Math.min(5, Object.keys(reorderedData).length))
               .tickFormat(i => {
-                // Find the original tick value
+                // Find the original tick value and format to 3 decimals
                 if (i >= 0 && i < reorderedData.length) {
-                  return reorderedData[i].tick;
+                  const tick = reorderedData[i].tick;
+                  const num = parseFloat(tick);
+                  return isNaN(num) || tick === 'Original Labels' ? tick : num.toFixed(3);
                 }
                 return i;
               }))
