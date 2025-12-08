@@ -181,7 +181,7 @@ export default defineComponent({
       
       // Draw blob hulls or contours based on mode
       if (showContours.value) {
-        // CONTOUR MODE: Draw density contours for all points, calculate and show minority class points
+        // CONTOUR MODE: Draw density contours with class color stripes for multi-class blobs
         console.log('=== CONTOUR MODE ===');
         console.log('Total blobs:', blobs.length);
         console.log('Total dataPoints:', dataPoints.length);
@@ -218,7 +218,7 @@ export default defineComponent({
             classCounts[point.originalLabel] = (classCounts[point.originalLabel] || 0) + 1;
           });
           const majorityClass = Object.entries(classCounts)
-            .reduce((max, [label, count]) => count > max.count ? { label: parseInt(label), count } : max, 
+            .reduce((max, [_, count]) => count > max.count ? { label: parseInt(_), count } : max, 
                     { label: 0, count: 0 }).label;
           
           console.log(`Blob ${blob.thresholdCluster}: ${blobPoints.length} total, ${majorityPoints.length} majority (for contours), ${minorityCount} minority (as points), majority class: ${majorityClass}`);
@@ -227,8 +227,16 @@ export default defineComponent({
           const isSelected = props.selectedCluster !== null && 
                            blob.thresholdCluster.toString() === props.selectedCluster.toString();
           
-          // Use majority class color instead of threshold cluster color
-          const color = originalLabelColors[majorityClass % originalLabelColors.length];
+          // Get all classes in this blob with significant presence (>= threshold)
+          const significantClasses = Object.entries(classCounts)
+            .filter(([, count]) => (count / totalPoints * 100) >= outlierThreshold.value)
+            .sort((a, b) => b[1] - a[1]) // Sort by count descending
+            .map(([classLabel]) => parseInt(classLabel));
+          
+          const isMultiClass = significantClasses.length > 1;
+          
+          // Use majority class color for fill
+          const fillColor = originalLabelColors[majorityClass % originalLabelColors.length];
           
           // Need at least 3 points for contours
           if (majorityPoints.length < 3) {
@@ -256,40 +264,101 @@ export default defineComponent({
           
           if (!contours || contours.length === 0) return;
           
-          // Fill the outer contour region - match hull appearance exactly
+          // Fill the outer contour region
           const outerContour = contours[0];
-          blobGroup.append('path')
-            .attr('d', d3.geoPath()(outerContour))
-            .attr('fill', color)
-            .attr('fill-opacity', isSelected ? 0.5 : 0.2) // Match hull exactly
-            .attr('stroke', isSelected ? '#ff6b35' : color) // Match hull stroke
-            .attr('stroke-width', isSelected ? 4 : 2) // Match hull stroke width
-            .attr('stroke-opacity', isSelected ? 1 : 0.6) // Match hull stroke opacity
-            .style('pointer-events', 'all')
-            .style('cursor', 'pointer')
-            .style('filter', isSelected ? 'drop-shadow(0px 4px 8px rgba(255, 107, 53, 0.4))' : 'none') // Match hull filter
-            .on('click', () => {
-              emit('blob-selected', blob);
-            })
-            .on('mouseover', function(event) {
-              d3.select(this)
-                .attr('fill-opacity', isSelected ? 0.6 : 0.4) // Match hull hover
-                .attr('stroke-width', isSelected ? 4 : 3); // Match hull hover
-              showBlobTooltip(event, blob, blobPoints);
-            })
-            .on('mouseout', function() {
-              d3.select(this)
-                .attr('fill-opacity', isSelected ? 0.5 : 0.2) // Match hull
-                .attr('stroke-width', isSelected ? 4 : 2); // Match hull
-              hideBlobTooltip();
+          
+          // For multi-class blobs, create a striped pattern stroke
+          if (isMultiClass) {
+            // Create a unique ID for this pattern
+            const patternId = `stripe-pattern-${blob.id}`;
+            
+            // Define the pattern
+            const defs = svg.value.select('defs').empty() 
+              ? svg.value.append('defs') 
+              : svg.value.select('defs');
+            
+            // Remove old pattern if exists
+            defs.select(`#${patternId}`).remove();
+            
+            // Create pattern with stripes
+            const pattern = defs.append('pattern')
+              .attr('id', patternId)
+              .attr('patternUnits', 'userSpaceOnUse')
+              .attr('width', significantClasses.length * 8)
+              .attr('height', 8)
+              .attr('patternTransform', 'rotate(45)');
+            
+            // Add color stripes for each significant class
+            significantClasses.forEach((classLabel, i) => {
+              pattern.append('rect')
+                .attr('x', i * 8)
+                .attr('y', 0)
+                .attr('width', 8)
+                .attr('height', 8)
+                .attr('fill', originalLabelColors[classLabel % originalLabelColors.length]);
             });
+            
+            // Draw the contour with striped stroke
+            blobGroup.append('path')
+              .attr('d', d3.geoPath()(outerContour))
+              .attr('fill', fillColor)
+              .attr('fill-opacity', isSelected ? 0.5 : 0.2)
+              .attr('stroke', `url(#${patternId})`)
+              .attr('stroke-width', isSelected ? 12 : 8)
+              .attr('stroke-opacity', 1)
+              .style('pointer-events', 'all')
+              .style('cursor', 'pointer')
+              .style('filter', isSelected ? 'drop-shadow(0px 4px 8px rgba(255, 107, 53, 0.4))' : 'none')
+              .on('click', () => {
+                emit('blob-selected', blob);
+              })
+              .on('mouseover', function(event) {
+                d3.select(this)
+                  .attr('fill-opacity', isSelected ? 0.6 : 0.4)
+                  .attr('stroke-width', isSelected ? 12 : 10);
+                showBlobTooltip(event, blob, blobPoints);
+              })
+              .on('mouseout', function() {
+                d3.select(this)
+                  .attr('fill-opacity', isSelected ? 0.5 : 0.2)
+                  .attr('stroke-width', isSelected ? 12 : 8);
+                hideBlobTooltip();
+              });
+          } else {
+            // Single class - use simple colored stroke
+            blobGroup.append('path')
+              .attr('d', d3.geoPath()(outerContour))
+              .attr('fill', fillColor)
+              .attr('fill-opacity', isSelected ? 0.5 : 0.2)
+              .attr('stroke', isSelected ? '#ff6b35' : fillColor)
+              .attr('stroke-width', isSelected ? 4 : 2)
+              .attr('stroke-opacity', isSelected ? 1 : 0.6)
+              .style('pointer-events', 'all')
+              .style('cursor', 'pointer')
+              .style('filter', isSelected ? 'drop-shadow(0px 4px 8px rgba(255, 107, 53, 0.4))' : 'none')
+              .on('click', () => {
+                emit('blob-selected', blob);
+              })
+              .on('mouseover', function(event) {
+                d3.select(this)
+                  .attr('fill-opacity', isSelected ? 0.6 : 0.4)
+                  .attr('stroke-width', isSelected ? 4 : 3);
+                showBlobTooltip(event, blob, blobPoints);
+              })
+              .on('mouseout', function() {
+                d3.select(this)
+                  .attr('fill-opacity', isSelected ? 0.5 : 0.2)
+                  .attr('stroke-width', isSelected ? 4 : 2);
+                hideBlobTooltip();
+              });
+          }
           
           // Draw subtle inner contour lines to show density variation
           contours.slice(1).forEach((contour) => {
             blobGroup.append('path')
               .attr('d', d3.geoPath()(contour))
               .attr('fill', 'none')
-              .attr('stroke', color)
+              .attr('stroke', fillColor)
               .attr('stroke-width', 0.5)
               .attr('stroke-opacity', 0.3)
               .attr('stroke-linejoin', 'round')
