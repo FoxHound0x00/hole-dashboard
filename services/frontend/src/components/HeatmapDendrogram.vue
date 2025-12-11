@@ -389,17 +389,43 @@ export default {
         .domain([0, n - 1])
         .range([0, height - margin.top - margin.bottom]);
       
-      // Calculate x scale for dendrogram (based on height/distance)
-      const maxHeight = root.height;
+      // Get available thresholds from cluster data to scale dendrogram properly
+      const availableThresholds = Object.keys(this.clusterData || {})
+        .filter(key => key !== 'Original Labels')
+        .map(t => parseFloat(t))
+        .filter(t => !isNaN(t))
+        .sort((a, b) => b - a); // Sort descending
       
-      console.log('Dendrogram maxHeight:', maxHeight);
+      const maxThreshold = availableThresholds.length > 0 ? availableThresholds[0] : null;
+      const minThreshold = availableThresholds.length > 0 ? availableThresholds[availableThresholds.length - 1] : 0;
       
-      // Standard dendrogram layout: leaves on right (high x), root on left (low x)
-      // Domain: 0 (leaves) to maxHeight (root)
-      // Range: width (leaves) to 0 (root)
+      // Calculate x scale for dendrogram
+      const dendrogramMaxHeight = root.height;
+      
+      console.log('Dendrogram maxHeight:', dendrogramMaxHeight);
+      console.log('Threshold range:', minThreshold, 'to', maxThreshold);
+      
+      // Normalize dendrogram heights to threshold range
+      // Map dendrogram internal heights [0, dendrogramMaxHeight] to threshold values [minThreshold, maxThreshold]
+      const heightToThreshold = d3.scaleLinear()
+        .domain([0, dendrogramMaxHeight])
+        .range([minThreshold, maxThreshold !== null ? maxThreshold : dendrogramMaxHeight]);
+      
+      // Update all node heights to threshold values
+      function normalizeHeights(node) {
+        if (node) {
+          node.height = heightToThreshold(node.height);
+          if (node.left) normalizeHeights(node.left);
+          if (node.right) normalizeHeights(node.right);
+        }
+      }
+      normalizeHeights(root);
+      
+      // Now create the display scale with normalized heights
+      // maxThreshold (root) at x=0 (left), minThreshold (leaves) at x=width (right)
       const xScale = d3.scaleLinear()
-        .domain([0, maxHeight])
-        .range([width, 0]);
+        .domain([maxThreshold !== null ? maxThreshold : root.height, minThreshold])
+        .range([0, width]);
       
       console.log('xScale domain:', xScale.domain(), 'range:', xScale.range());
       

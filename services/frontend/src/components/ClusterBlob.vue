@@ -209,7 +209,6 @@ export default defineComponent({
           });
           
           // Separate majority and minority points
-          const majorityPoints = blobPoints.filter(p => !p.isMinorityClass);
           const minorityCount = blobPoints.filter(p => p.isMinorityClass).length;
           
           // Find the majority class (most frequent class in this blob)
@@ -221,7 +220,7 @@ export default defineComponent({
             .reduce((max, [_, count]) => count > max.count ? { label: parseInt(_), count } : max, 
                     { label: 0, count: 0 }).label;
           
-          console.log(`Blob ${blob.thresholdCluster}: ${blobPoints.length} total, ${majorityPoints.length} majority (for contours), ${minorityCount} minority (as points), majority class: ${majorityClass}`);
+          console.log(`Blob ${blob.thresholdCluster}: ${blobPoints.length} total, ${minorityCount} minority (as points), majority class: ${majorityClass}`);
           
           // Check if this blob should be highlighted
           const isSelected = props.selectedCluster !== null && 
@@ -239,24 +238,47 @@ export default defineComponent({
           const fillColor = originalLabelColors[majorityClass % originalLabelColors.length];
           
           // Need at least 3 points for contours
-          if (majorityPoints.length < 3) {
-            console.warn(`Blob ${blob.thresholdCluster}: Not enough majority points for contours`);
+          if (blobPoints.length < 3) {
+            console.warn(`Blob ${blob.thresholdCluster}: Not enough points for contours`);
             return;
           }
           
-          // Create contour density generator for MAJORITY POINTS ONLY (exclude minority)
-          // Use moderate bandwidth to keep contours within the point cloud
+          // Create convex hull to constrain contours to actual point locations
+          const points = blobPoints.map(point => [point.x, point.y]);
+          const hull = d3.polygonHull(points);
+          
+          if (!hull) return;
+          
+          const paddedHull = padHull(hull, 20);
+          
+          // Create a polygon path for clipping
+          const hullPath = `M${paddedHull.join('L')}Z`;
+          const clipPathId = `clip-${blob.id}`;
+          
+          // Define clip path
+          const defs = svg.value.select('defs').empty() 
+            ? svg.value.append('defs') 
+            : svg.value.select('defs');
+          
+          defs.select(`#${clipPathId}`).remove();
+          defs.append('clipPath')
+            .attr('id', clipPathId)
+            .append('path')
+            .attr('d', hullPath);
+          
+          // Create contour density generator for ALL BLOB POINTS
+          // Use large bandwidth to prevent splitting inside the blob
           const densityContours = contourDensity()
             .x(d => d.x)
             .y(d => d.y)
             .size([width.value, height.value])
-            .bandwidth(20) // Smaller bandwidth = tighter contours around actual points
-            .thresholds(10); // Moderate number of contour lines
+            .bandwidth(40) // Large bandwidth = smooth, connected contours without splitting
+            .thresholds(8); // Fewer contour lines for cleaner appearance
           
-          // Generate contours for majority class points only
+          // Generate contours for ALL points in blob
           let contours;
           try {
-            contours = densityContours(majorityPoints);
+            contours = densityContours(blobPoints);
           } catch (error) {
             console.error(`Error generating contours for blob ${blob.thresholdCluster}:`, error);
             return;
@@ -264,18 +286,10 @@ export default defineComponent({
           
           if (!contours || contours.length === 0) return;
           
-          // Fill the outer contour region
-          const outerContour = contours[0];
-          
           // For multi-class blobs, create a striped pattern stroke
           if (isMultiClass) {
             // Create a unique ID for this pattern
             const patternId = `stripe-pattern-${blob.id}`;
-            
-            // Define the pattern
-            const defs = svg.value.select('defs').empty() 
-              ? svg.value.append('defs') 
-              : svg.value.select('defs');
             
             // Remove old pattern if exists
             defs.select(`#${patternId}`).remove();
@@ -298,9 +312,9 @@ export default defineComponent({
                 .attr('fill', originalLabelColors[classLabel % originalLabelColors.length]);
             });
             
-            // Draw the contour with striped stroke
+            // Draw the hull boundary with striped stroke
             blobGroup.append('path')
-              .attr('d', d3.geoPath()(outerContour))
+              .attr('d', hullPath)
               .attr('fill', fillColor)
               .attr('fill-opacity', isSelected ? 0.5 : 0.2)
               .attr('stroke', `url(#${patternId})`)
@@ -327,7 +341,7 @@ export default defineComponent({
           } else {
             // Single class - use simple colored stroke
             blobGroup.append('path')
-              .attr('d', d3.geoPath()(outerContour))
+              .attr('d', hullPath)
               .attr('fill', fillColor)
               .attr('fill-opacity', isSelected ? 0.5 : 0.2)
               .attr('stroke', isSelected ? '#ff6b35' : fillColor)
@@ -353,14 +367,17 @@ export default defineComponent({
               });
           }
           
-          // Draw subtle inner contour lines to show density variation
-          contours.slice(1).forEach((contour) => {
-            blobGroup.append('path')
+          // Draw inner contour lines clipped to the hull to show density variation
+          const contourGroup = blobGroup.append('g')
+            .attr('clip-path', `url(#${clipPathId})`);
+          
+          contours.forEach((contour) => {
+            contourGroup.append('path')
               .attr('d', d3.geoPath()(contour))
               .attr('fill', 'none')
               .attr('stroke', fillColor)
-              .attr('stroke-width', 0.5)
-              .attr('stroke-opacity', 0.3)
+              .attr('stroke-width', 1)
+              .attr('stroke-opacity', 0.4)
               .attr('stroke-linejoin', 'round')
               .style('pointer-events', 'none'); // Not interactive, just visual
           });

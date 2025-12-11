@@ -151,16 +151,16 @@ export default defineComponent({
       // X Axis
       svg.append('g')
         .attr('transform', `translate(0,${innerHeight})`)
-        // .call(d3.axisBottom(x).ticks(Math.min(5, reorderedData.length))
-        .call(d3.axisBottom(x).ticks(Math.min(5, Object.keys(reorderedData).length))
+        .call(d3.axisBottom(x).ticks(Math.min(5, reorderedData.length))
               .tickFormat(i => {
                 // Find the original tick value and format to 3 decimals
-                if (i >= 0 && i < reorderedData.length) {
-                  const tick = reorderedData[i].tick;
+                const index = Math.round(i);
+                if (index >= 0 && index < reorderedData.length) {
+                  const tick = reorderedData[index].tick;
                   const num = parseFloat(tick);
-                  return isNaN(num) || tick === 'Original Labels' ? tick : num.toFixed(3);
+                  return isNaN(num) ? '' : num.toFixed(3);
                 }
-                return i;
+                return '';
               }))
         .append('text')
         .attr('x', innerWidth / 2)
@@ -235,16 +235,14 @@ export default defineComponent({
         const filteredData = {}
         
         // Add Original Labels data first (always included)
-        if (originalLabelsStage && props.deathData[0]) {
-          filteredData[originalLabelsStage] = props.deathData[0]
+        if (originalLabelsStage && props.deathData[originalLabelsStage]) {
+          filteredData[originalLabelsStage] = props.deathData[originalLabelsStage]
         }
         
         // Then add the brushed threshold stages
         brushedStages.forEach((stage) => {
-          // Find the original index of this stage in availableStages
-          const index = props.availableStages.indexOf(stage)
-          if (index !== -1 && props.deathData[index]) {
-            filteredData[stage] = props.deathData[index]
+          if (stage && props.deathData[stage]) {
+            filteredData[stage] = props.deathData[stage]
           }
         })
         
