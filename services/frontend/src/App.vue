@@ -415,7 +415,7 @@ export default {
       }
     },
     
-    // Save all visualizations as SVGs and metadata as JSON in a ZIP file
+    // Save all visualizations as PNG images and metadata as JSON in a ZIP file
     async saveAllVisualizations() {
       this.isSaving = true;
       
@@ -437,19 +437,24 @@ export default {
         
         const savedFiles = [];
         
-        // Add each SVG to the ZIP
+        // Convert each SVG to PNG and add to ZIP
         for (const config of svgConfigs) {
           const svgElements = document.querySelectorAll(config.selector);
-          svgElements.forEach((svg, index) => {
+          for (let index = 0; index < svgElements.length; index++) {
+            const svg = svgElements[index];
             if (svg) {
-              const svgData = this.serializeSvg(svg);
-              const filename = svgElements.length > 1 
-                ? `${config.name}_${index + 1}.svg`
-                : `${config.name}.svg`;
-              zip.file(filename, svgData);
-              savedFiles.push(filename);
+              try {
+                const pngBlob = await this.svgToPng(svg);
+                const filename = svgElements.length > 1 
+                  ? `${config.name}_${index + 1}.png`
+                  : `${config.name}.png`;
+                zip.file(filename, pngBlob);
+                savedFiles.push(filename);
+              } catch (err) {
+                console.error(`Error converting ${config.name} to PNG:`, err);
+              }
             }
-          });
+          }
         }
         
         // Create metadata JSON
@@ -493,6 +498,56 @@ export default {
       } finally {
         this.isSaving = false;
       }
+    },
+    
+    // Convert SVG to PNG blob
+    async svgToPng(svgElement, scale = 2) {
+      return new Promise((resolve, reject) => {
+        try {
+          // Get SVG dimensions
+          const bbox = svgElement.getBBox();
+          const width = svgElement.width.baseVal.value || bbox.width;
+          const height = svgElement.height.baseVal.value || bbox.height;
+          
+          // Serialize SVG with inline styles
+          const svgData = this.serializeSvg(svgElement);
+          
+          // Create canvas
+          const canvas = document.createElement('canvas');
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.scale(scale, scale);
+          
+          // Create image from SVG
+          const img = new Image();
+          const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+            
+            // Convert canvas to blob
+            canvas.toBlob((pngBlob) => {
+              if (pngBlob) {
+                resolve(pngBlob);
+              } else {
+                reject(new Error('Failed to create PNG blob'));
+              }
+            }, 'image/png');
+          };
+          
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Failed to load SVG image'));
+          };
+          
+          img.src = url;
+        } catch (error) {
+          reject(error);
+        }
+      });
     },
     
     // Serialize SVG element to string with styles
