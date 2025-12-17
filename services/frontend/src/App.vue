@@ -11,6 +11,14 @@
           </select>
         </div>
       </div>
+      <button class="save-btn" @click="saveAllVisualizations" :disabled="isSaving">
+        <svg v-if="!isSaving" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z"/>
+          <path d="M14 14H2v-3h1v2h10v-2h1v3z"/>
+        </svg>
+        <span v-if="isSaving" class="spinner"></span>
+        {{ isSaving ? 'Saving...' : 'Save All' }}
+      </button>
     </div>
     
     <!-- Left Sidebar: Selectors and Filters -->
@@ -144,7 +152,8 @@ export default {
       selectedThreshold: null,
       selectedCluster: null,
       noisyThreshold: 5,
-      visualizationMethod: 'pca'
+      visualizationMethod: 'pca',
+      isSaving: false
     };
   },
   created() {
@@ -404,6 +413,161 @@ export default {
         // Update data with selected stages
         self.updateFilteredData();
       }
+    },
+    
+    // Save all visualizations as SVGs and metadata as JSON in a ZIP file
+    async saveAllVisualizations() {
+      this.isSaving = true;
+      
+      try {
+        // Dynamic import JSZip
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+        
+        // Create a timestamp for unique filenames
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        
+        // Collect all SVG elements from different visualization containers
+        const svgConfigs = [
+          { selector: '.sidebar svg', name: 'cluster_selector' },
+          { selector: '.main-viz svg', name: this.chartType === 'sankey' ? 'sankey_flow' : 'stacked_bars' },
+          { selector: '.blob-viz svg', name: this.visualizationMethod === 'fd' ? 'force_directed' : 'cluster_blob' },
+          { selector: '.heatmap-viz svg', name: 'heatmap_dendrogram' }
+        ];
+        
+        const savedFiles = [];
+        
+        // Add each SVG to the ZIP
+        for (const config of svgConfigs) {
+          const svgElements = document.querySelectorAll(config.selector);
+          svgElements.forEach((svg, index) => {
+            if (svg) {
+              const svgData = this.serializeSvg(svg);
+              const filename = svgElements.length > 1 
+                ? `${config.name}_${index + 1}.svg`
+                : `${config.name}.svg`;
+              zip.file(filename, svgData);
+              savedFiles.push(filename);
+            }
+          });
+        }
+        
+        // Create metadata JSON
+        const metadata = {
+          timestamp: new Date().toISOString(),
+          parameters: {
+            distanceMetric: this.selectedOptions['Distance Metric'] || null,
+            selectedThreshold: this.selectedThreshold,
+            selectedCluster: this.selectedCluster,
+            noisyThreshold: this.noisyThreshold,
+            visualizationMethod: this.visualizationMethod,
+            chartType: this.chartType,
+            selectedStages: this.selectedStages,
+            availableStages: this.availableStages
+          },
+          dropdownOptions: this.selectedOptions,
+          data: {
+            rawClusterDataKeys: Object.keys(this.rawClusterData),
+            filteredClusterDataKeys: Object.keys(this.filteredClusterData),
+            sizeFilteredClusterDataKeys: Object.keys(this.sizeFilteredClusterData),
+            totalDataPoints: this.rawClusterData['Original Labels'] 
+              ? this.rawClusterData['Original Labels'].length 
+              : 0,
+            clusterData: this.sizeFilteredClusterData
+          },
+          savedFiles: savedFiles
+        };
+        
+        // Add metadata JSON to ZIP
+        zip.file('metadata.json', JSON.stringify(metadata, null, 2));
+        
+        // Generate ZIP and download
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const zipFilename = `visualization_export_${timestamp}.zip`;
+        this.downloadFile(zipBlob, zipFilename, 'application/zip');
+        
+        console.log('All visualizations saved to ZIP successfully!');
+      } catch (error) {
+        console.error('Error saving visualizations:', error);
+        alert('Error saving visualizations. Check console for details.');
+      } finally {
+        this.isSaving = false;
+      }
+    },
+    
+    // Serialize SVG element to string with styles
+    serializeSvg(svgElement) {
+      // Clone the SVG to avoid modifying the original
+      const clone = svgElement.cloneNode(true);
+      
+      // Add XML namespace if not present
+      if (!clone.getAttribute('xmlns')) {
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      }
+      if (!clone.getAttribute('xmlns:xlink')) {
+        clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+      
+      // Get computed styles and inline them
+      this.inlineStyles(svgElement, clone);
+      
+      // Serialize to string
+      const serializer = new XMLSerializer();
+      let svgString = serializer.serializeToString(clone);
+      
+      // Add XML declaration
+      svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
+      
+      return svgString;
+    },
+    
+    // Inline computed styles into SVG elements
+    inlineStyles(original, clone) {
+      const originalChildren = original.querySelectorAll('*');
+      const cloneChildren = clone.querySelectorAll('*');
+      
+      // Important style properties to preserve
+      const styleProps = [
+        'fill', 'stroke', 'stroke-width', 'stroke-opacity', 'fill-opacity',
+        'opacity', 'font-family', 'font-size', 'font-weight', 'text-anchor',
+        'dominant-baseline', 'transform', 'visibility', 'display'
+      ];
+      
+      originalChildren.forEach((origEl, i) => {
+        const cloneEl = cloneChildren[i];
+        if (cloneEl) {
+          const computed = window.getComputedStyle(origEl);
+          let inlineStyle = '';
+          
+          styleProps.forEach(prop => {
+            const value = computed.getPropertyValue(prop);
+            if (value && value !== 'none' && value !== 'normal' && value !== '') {
+              inlineStyle += `${prop}:${value};`;
+            }
+          });
+          
+          if (inlineStyle) {
+            const existing = cloneEl.getAttribute('style') || '';
+            cloneEl.setAttribute('style', existing + inlineStyle);
+          }
+        }
+      });
+    },
+    
+    // Download file helper
+    downloadFile(content, filename, mimeType) {
+      // Handle both Blob and string content
+      const blob = content instanceof Blob 
+        ? content 
+        : new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
   }
 }
@@ -495,6 +659,51 @@ export default {
   outline: none;
   border-color: #409eff;
   box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+/* Save Button */
+.save-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: #219a52;
+}
+
+.save-btn:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+.save-btn svg {
+  flex-shrink: 0;
+}
+
+.save-btn .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Sidebar (Selectors and Filters) */
