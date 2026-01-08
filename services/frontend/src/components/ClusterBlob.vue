@@ -313,31 +313,31 @@ export default defineComponent({
             });
             
             // Draw the hull boundary with striped stroke
-            blobGroup.append('path')
+          blobGroup.append('path')
               .attr('d', hullPath)
               .attr('fill', fillColor)
               .attr('fill-opacity', isSelected ? 0.5 : 0.2)
               .attr('stroke', `url(#${patternId})`)
               .attr('stroke-width', isSelected ? 12 : 8)
               .attr('stroke-opacity', 1)
-              .style('pointer-events', 'all')
-              .style('cursor', 'pointer')
+            .style('pointer-events', 'all')
+            .style('cursor', 'pointer')
               .style('filter', isSelected ? 'drop-shadow(0px 4px 8px rgba(255, 107, 53, 0.4))' : 'none')
-              .on('click', () => {
-                emit('blob-selected', blob);
-              })
-              .on('mouseover', function(event) {
-                d3.select(this)
+            .on('click', () => {
+              emit('blob-selected', blob);
+            })
+            .on('mouseover', function(event) {
+              d3.select(this)
                   .attr('fill-opacity', isSelected ? 0.6 : 0.4)
                   .attr('stroke-width', isSelected ? 12 : 10);
-                showBlobTooltip(event, blob, blobPoints);
-              })
-              .on('mouseout', function() {
-                d3.select(this)
+              showBlobTooltip(event, blob, blobPoints);
+            })
+            .on('mouseout', function() {
+              d3.select(this)
                   .attr('fill-opacity', isSelected ? 0.5 : 0.2)
                   .attr('stroke-width', isSelected ? 12 : 8);
-                hideBlobTooltip();
-              });
+              hideBlobTooltip();
+            });
           } else {
             // Single class - use simple colored stroke
             blobGroup.append('path')
@@ -368,19 +368,60 @@ export default defineComponent({
           }
           
           // Draw inner contour lines clipped to the hull to show density variation
+          // const contourGroup = blobGroup.append('g')
+          //   .attr('clip-path', `url(#${clipPathId})`);
+          
+          // contours.forEach((contour) => {
+          //   contourGroup.append('path')
+          //     .attr('d', d3.geoPath()(contour))
+          //     .attr('fill', 'none')
+          //     .attr('stroke', fillColor)
+          //     .attr('stroke-width', 1)
+          //     .attr('stroke-opacity', 0.4)
+          //     .attr('stroke-linejoin', 'round')
+          //     .style('pointer-events', 'none'); // Not interactive, just visual
+          // });
+          // Draw inner contours as filled regions clipped to the hull, but keep the class color
           const contourGroup = blobGroup.append('g')
             .attr('clip-path', `url(#${clipPathId})`);
-          
-          contours.forEach((contour) => {
-            contourGroup.append('path')
-              .attr('d', d3.geoPath()(contour))
-              .attr('fill', 'none')
-              .attr('stroke', fillColor)
-              .attr('stroke-width', 1)
-              .attr('stroke-opacity', 0.4)
-              .attr('stroke-linejoin', 'round')
-              .style('pointer-events', 'none'); // Not interactive, just visual
+            
+            
+          const baseColor = d3.color(fillColor);
+
+          // Sort contours outer → inner
+          const sortedContours = [...contours].sort((a, b) => {
+            const va = a.value ?? 0;
+            const vb = b.value ?? 0;
+            return va - vb;
           });
+
+
+          const values = sortedContours.map(c => c.value ?? 0);
+          const minV = d3.min(values) ?? 0;
+          const maxV = d3.max(values) ?? 1;
+          const range = maxV - minV || 1;
+
+
+          const minOpacity = 0.03;   // outermost barely visible
+          const maxOpacity = 0.25;   // inner clearly denser, not loud
+          const gamma = 0.7;         // soft perceptual boost
+
+          sortedContours.forEach((contour, i) => {
+          const v = contour.value ?? i;
+          const tLinear = (v - minV) / range;
+          const t = Math.pow(tLinear, gamma);
+
+          contourGroup.append('path')
+            .attr('d', d3.geoPath()(contour))
+            .attr('fill', baseColor)
+            .attr('fill-opacity', minOpacity + t * (maxOpacity - minOpacity))
+            .attr('stroke', baseColor)
+            .attr('stroke-opacity', 0.05)
+            .attr('stroke-width', 0.6)
+            .style('pointer-events', 'none');
+        });
+
+          
         });
       } else {
         // HULL MODE: Draw convex hulls with majority class colors
