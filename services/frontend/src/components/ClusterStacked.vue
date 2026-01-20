@@ -1,7 +1,7 @@
 <template>
-  <div>
+  <div class="stacked-wrapper">
     <div ref="chart" class="chart-container"></div>
-    <div class="info-box" ref="infoBox">
+    <div class="info-box" ref="infoBox" :class="{ 'visible': selectedInfo }">
       <div v-if="selectedInfo">
         <h3>{{ selectedInfo.title }}</h3>
         <div class="info-stats">
@@ -22,9 +22,6 @@
             <div class="stat-label">Total</div>
           </div>
         </div>
-      </div>
-      <div v-else class="empty-info">
-        Hover over a cluster to see details
       </div>
     </div>
   </div>
@@ -63,6 +60,10 @@ export default {
   },
   mounted() {
     this.renderChart();
+    window.addEventListener('resize', this.handleResize);
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.handleResize);
   },
   watch: {
     data: {
@@ -76,6 +77,13 @@ export default {
     }
   },
   methods: {
+    // Handle window resize
+    handleResize() {
+      clearTimeout(this.resizeTimeout);
+      this.resizeTimeout = setTimeout(() => {
+        this.renderChart();
+      }, 250);
+    },
     // Update the info box with cluster data
     updateInfoBox(stage, cluster, count, connections, isSelected = false) {
       this.selectedInfo = {
@@ -103,8 +111,19 @@ export default {
       
       el.innerHTML = '';
       
-      const { width, height } = this;
-      const margin = { top: 80, right: 180, bottom: 80, left: 70 };
+      // Use container dimensions and scale margins proportionally
+      const containerWidth = el.clientWidth || 800;
+      const containerHeight = el.clientHeight || 500;
+      
+      // Scale margins based on container size (percentage-based)
+      const marginTop = Math.max(containerHeight * 0.12, 40);
+      const marginRight = Math.max(containerWidth * 0.15, 80); // Space for legend
+      const marginBottom = Math.max(containerHeight * 0.12, 40);
+      const marginLeft = Math.max(containerWidth * 0.08, 40);
+      
+      const width = containerWidth;
+      const height = containerHeight;
+      const margin = { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft };
       const innerWidth = width - margin.left - margin.right;
       const innerHeight = height - margin.top - margin.bottom;
       
@@ -119,11 +138,15 @@ export default {
         return parseFloat(a) - parseFloat(b); // Ascending order for thresholds
       });
       
-      // Create SVG
+      // Create SVG with viewBox for responsiveness
       const svg = d3.select(el)
         .append('svg')
-        .attr('width', width)
-        .attr('height', height);
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet')
+        .style('max-width', '100%')
+        .style('height', 'auto');
       
       // Add a group for the chart
       const chart = svg.append('g')
@@ -208,9 +231,11 @@ export default {
         .attr('stroke-width', 1)
         .attr('opacity', 0.7);
       
-      // Draw interactive threshold labels above bars (discrete style)
+      // Draw interactive threshold labels above bars (discrete style) - responsive font
       const thresholdStages = stages.filter(stage => stage !== 'Original Labels');
       const self = this; // Store reference to Vue component
+      const labelFontSize = Math.max(Math.min(containerHeight * 0.025, 12), 8);
+      
       chart.selectAll('.threshold-label')
         .data(thresholdStages)
         .enter()
@@ -220,7 +245,7 @@ export default {
         .attr('y', -20)
         .attr('text-anchor', 'middle')
         .attr('font-weight', 'bold')
-        .attr('font-size', '12px')
+        .attr('font-size', `${labelFontSize}px`)
         .attr('fill', d => self.selectedThreshold === d ? '#e74c3c' : '#333')
         .style('cursor', 'pointer')
         .style('transition', 'all 0.2s ease')
@@ -261,7 +286,7 @@ export default {
         .attr('y', -20)
         .attr('text-anchor', 'middle')
         .attr('font-weight', 'bold')
-        .attr('font-size', '12px')
+        .attr('font-size', `${labelFontSize}px`)
         .text(d => d);
       
       // Draw stacked bars with enhanced styling
@@ -453,13 +478,16 @@ export default {
         .attr('fill', '#555')
         .text(d => d.length > 8 ? d.substring(0, 8) + '...' : d);
       
-      // Add instructions text
-      svg.append('text')
-        .attr('x', margin.left)
-        .attr('y', height - 10)
-        .attr('font-size', '12px')
-        .attr('fill', '#666')
-        .text('Hover over bars to see details | Click threshold labels to select');
+      // Add instructions text (responsive, hide if too small)
+      if (containerHeight > 300) {
+        const instructionFontSize = Math.max(Math.min(containerHeight * 0.02, 11), 8);
+        svg.append('text')
+          .attr('x', margin.left)
+          .attr('y', height - 10)
+          .attr('font-size', `${instructionFontSize}px`)
+          .attr('fill', '#666')
+          .text('Hover over bars to see details | Click threshold labels to select');
+      }
     }
   }
 }
@@ -467,27 +495,63 @@ export default {
 
 <style scoped>
 
+.stacked-wrapper {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
 .chart-container {
   width: 100%;
-  min-height: 500px;
-  margin-bottom: 20px;
+  height: 100%;
+  overflow: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-container svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
 }
 
 .info-box {
-  width: 100%;
-  min-height: 80px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 10px;
-  background-color: #f9f9f9;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  max-width: 400px;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background-color: rgba(0, 0, 0, 0.85);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.info-box.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Hide if empty or too small */
+.info-box:empty,
+.info-box:not(.visible) {
+  display: none;
 }
 
 .info-box h3 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 13px;
-  color: #333;
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: white;
   font-weight: 600;
   letter-spacing: 0.3px;
 }
@@ -495,29 +559,23 @@ export default {
 .info-stats {
   display: flex;
   justify-content: space-around;
+  gap: 10px;
 }
 
 .stat-item {
   text-align: center;
-  padding: 0 10px;
+  padding: 0 6px;
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: bold;
-  color: #2c3e50;
+  color: #fff;
 }
 
 .stat-label {
-  font-size: 12px;
-  color: #666;
-}
-
-.empty-info {
-  color: #999;
-  text-align: center;
-  font-style: italic;
-  padding: 20px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 </style>

@@ -1,12 +1,14 @@
 <template>
   <div class="cluster-selector">
-    <h3>Select Death Threshold:</h3>
+    <div class="header-overlay">
+      <h3>Death Threshold</h3>
+    </div>
     <div ref="chartContainer" class="chart-container"></div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, watch, defineComponent } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, defineComponent } from 'vue'
 import * as d3 from 'd3'
 
 export default defineComponent({
@@ -29,6 +31,14 @@ export default defineComponent({
   setup(props, { emit }) {
     const chartContainer = ref(null)
     const selectedStages = ref([])
+    let resizeTimeout = null
+
+    const handleResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        createChart();
+      }, 250);
+    };
 
     const createChart = () => {
       // Clear previous chart
@@ -46,20 +56,34 @@ export default defineComponent({
         Object.keys(tickData).forEach(subkey => allSubkeys.add(subkey))
       })
 
-      // Chart dimensions - responsive to container
-      const legendWidth = 100
-      const margin = { top: 20, right: 50, bottom: 40, left: 50 }
-      const width = chartContainer.value.clientWidth || 800
-      const height = chartContainer.value.clientHeight || 200
+      // Chart dimensions - responsive margins based on container size
+      const containerWidth = chartContainer.value.clientWidth || 800
+      const containerHeight = chartContainer.value.clientHeight || 200
+      
+      const marginTop = Math.max(containerHeight * 0.1, 15)
+      const marginRight = Math.max(containerWidth * 0.06, 30)
+      const marginBottom = Math.max(containerHeight * 0.15, 25)
+      const marginLeft = Math.max(containerWidth * 0.06, 30)
+      const legendWidth = Math.max(containerWidth * 0.12, 80)
+      
+      const margin = { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft }
+      const width = containerWidth
+      const height = containerHeight
       const innerWidth = width - margin.left - margin.right - legendWidth 
       const innerHeight = height - margin.top - margin.bottom
 
-      // Create SVG
-      const svg = d3.select(chartContainer.value)
+      // Create SVG with viewBox for responsiveness
+      const svgRoot = d3.select(chartContainer.value)
         .append('svg')
-        .attr('width', width)
-        .attr('height', height)
-        .append('g')
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet')
+        .style('max-width', '100%')
+        .style('height', 'auto')
+        .style('display', 'block');
+      
+      const svg = svgRoot.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`)
 
       // Prepare data for stacking
@@ -148,8 +172,12 @@ export default defineComponent({
         .attr('stroke-width', 0.5)
 
 
+      // Responsive font sizes
+      const axisFontSize = Math.max(Math.min(containerHeight * 0.06, 11), 8)
+      const labelFontSize = Math.max(Math.min(containerHeight * 0.07, 12), 9)
+      
       // X Axis
-      svg.append('g')
+      const xAxisGroup = svg.append('g')
         .attr('transform', `translate(0,${innerHeight})`)
         .call(d3.axisBottom(x).ticks(Math.min(5, reorderedData.length))
               .tickFormat(i => {
@@ -162,24 +190,34 @@ export default defineComponent({
                 }
                 return '';
               }))
-        .append('text')
+      
+      xAxisGroup.selectAll('text')
+        .attr('font-size', `${axisFontSize}px`)
+        
+      xAxisGroup.append('text')
         .attr('x', innerWidth / 2)
         .attr('y', 40)
         .attr('fill', '#000')
         .attr('font-weight', 'bold')
+        .attr('font-size', `${labelFontSize}px`)
         .text('Deaths')
 
 
       // Y Axis
-      svg.append('g')
+      const yAxisGroup = svg.append('g')
         .call(d3.axisLeft(y))
-        .append('text')
+      
+      yAxisGroup.selectAll('text')
+        .attr('font-size', `${axisFontSize}px`)
+        
+      yAxisGroup.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('y', -40)
         .attr('x', -innerHeight / 2)
         .attr('text-anchor', 'middle')
         .attr('fill', '#000')
         .attr('font-weight', 'bold')
+        .attr('font-size', `${labelFontSize}px`)
         .text('Cluster Count')
 
       // Brush
@@ -251,48 +289,49 @@ export default defineComponent({
       }
 
 
-      // Legend - only show original labels
+      // Legend - only show original labels with responsive sizing
+      const legendFontSize = Math.max(Math.min(containerHeight * 0.055, 10), 7)
+      const legendItemHeight = Math.max(Math.min(containerHeight * 0.1, 18), 12)
+      const legendSquareSize = Math.max(Math.min(containerHeight * 0.06, 12), 8)
+      
       const legend = svg.append('g')
         .attr('class', 'legend')
-        // .attr('transform', `translate(${margin.left + innerWidth + legendMargin}, ${margin.top})`)
-        .attr('transform', `translate(${margin.left + innerWidth}, ${margin.top})`)
-
+        .attr('transform', `translate(${margin.left + innerWidth + 10}, ${margin.top})`)
 
       // Legend background
       legend.append('rect')
-        .attr('x', -10)
-        .attr('y', -10)
-        .attr('width', legendWidth)
-        .attr('height', originalLabels.length * 20 + 15)
+        .attr('x', -8)
+        .attr('y', -8)
+        .attr('width', legendWidth - 10)
+        .attr('height', originalLabels.length * legendItemHeight + 12)
         .attr('fill', 'rgba(255, 255, 255, 0.95)')
         .attr('stroke', '#ddd')
         .attr('stroke-width', 1)
-        .attr('rx', 4)
-
+        .attr('rx', 3)
         
-        // Legend color squares - only original labels
-        // Note: Legend colors don't reflect noisy threshold since they show original labels
-        legend.selectAll('rect.legend-color')
-          .data(originalLabels)
-          .enter()
-          .append('rect')
-          .attr('class', 'legend-color')
-          .attr('x', 0)
-          .attr('y', (d, i) => i * 20)
-          .attr('width', 12)
-          .attr('height', 12)
-          .attr('fill', d => color(d))
+      // Legend color squares - only original labels
+      legend.selectAll('rect.legend-color')
+        .data(originalLabels)
+        .enter()
+        .append('rect')
+        .attr('class', 'legend-color')
+        .attr('x', 0)
+        .attr('y', (d, i) => i * legendItemHeight)
+        .attr('width', legendSquareSize)
+        .attr('height', legendSquareSize)
+        .attr('fill', d => color(d))
+        .attr('rx', 1)
 
-        // Legend text - only original labels
-        legend.selectAll('text')
-          .data(originalLabels)
-          .enter()
-          .append('text')
-          .attr('x', 18)
-          .attr('y', (d, i) => i * 20 + 9)
-          .attr('font-size', '11px')
-          .attr('fill', '#555')
-          .text(d => d)
+      // Legend text - only original labels
+      legend.selectAll('text')
+        .data(originalLabels)
+        .enter()
+        .append('text')
+        .attr('x', legendSquareSize + 6)
+        .attr('y', (d, i) => i * legendItemHeight + legendSquareSize * 0.75)
+        .attr('font-size', `${legendFontSize}px`)
+        .attr('fill', '#555')
+        .text(d => d)
       }
 
     // Initialize
@@ -300,8 +339,15 @@ export default defineComponent({
       if (props.availableStages.length > 0) {
         selectedStages.value = [...props.availableStages]
       }
-      createChart()
+      createChart();
+      window.addEventListener('resize', handleResize);
     })
+    
+    // Cleanup
+    onBeforeUnmount(() => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimeout);
+    });
     
     // Watch for data changes
     watch(() => props.deathData, createChart, { deep: true })
@@ -320,30 +366,54 @@ export default defineComponent({
 <style scoped>
 .cluster-selector {
   background-color: #f8f9fa;
-  padding: 8px;
   border: 1px solid #e0e0e0;
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  position: relative;
   overflow: hidden;
 }
 
-.cluster-selector h3 {
-  margin: 0 0 6px 0;
-  font-size: 13px;
-  color: #333;
-  font-weight: 600;
-  flex-shrink: 0;
-  letter-spacing: 0.3px;
+.header-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 4px 8px;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.header-overlay:hover {
+  opacity: 1;
+}
+
+.header-overlay h3 {
+  margin: 0;
+  color: white;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
 }
 
 .chart-container {
   width: 100%;
-  flex: 1;
+  height: 100%;
   background-color: white;
-  border: 1px solid #d0d0d0;
-  overflow: hidden;
-  min-height: 0;
+  overflow: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-container svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
 }
 
 .brush .selection {

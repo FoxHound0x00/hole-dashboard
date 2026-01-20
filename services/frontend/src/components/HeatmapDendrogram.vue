@@ -1,14 +1,14 @@
 <template>
   <div class="heatmap-dendrogram-container">
-    <h3>Heatmap Dendrogram - {{ metric }}</h3>
+    <div class="header-overlay">
+      <h3>{{ metric }}</h3>
+      <span v-if="!loading && !error && distanceMatrix" class="matrix-size">
+        {{ distanceMatrix.length }}×{{ distanceMatrix.length }}
+      </span>
+    </div>
     <div v-if="loading" class="loading">Loading distance matrix...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
-    <div v-else>
-      <p style="color: #666; font-size: 12px; margin-bottom: 10px;">
-        Matrix size: {{ distanceMatrix ? distanceMatrix.length : 0 }}x{{ distanceMatrix ? distanceMatrix.length : 0 }}
-      </p>
-      <div ref="chartContainer" class="chart-container"></div>
-    </div>
+    <div v-else ref="chartContainer" class="chart-container"></div>
   </div>
 </template>
 
@@ -78,12 +78,28 @@ export default {
       }
     }
   },
+  mounted() {
+    window.addEventListener('resize', this.handleResize);
+  },
   beforeUnmount() {
     if (this.fetchTimeout) {
       clearTimeout(this.fetchTimeout);
     }
+    if (this.renderTimeout) {
+      clearTimeout(this.renderTimeout);
+    }
+    if (this.resizeTimeout) {
+      clearTimeout(this.resizeTimeout);
+    }
+    window.removeEventListener('resize', this.handleResize);
   },
   methods: {
+    handleResize() {
+      clearTimeout(this.resizeTimeout);
+      this.resizeTimeout = setTimeout(() => {
+        this.renderVisualization();
+      }, 250);
+    },
     async fetchDistanceMatrix() {
       this.loading = true;
       this.error = null;
@@ -126,14 +142,24 @@ export default {
         }
         
         const containerWidth = container.clientWidth || 1000;
+        const containerHeight = container.clientHeight || 600;
         
-        // Dimensions - make both dendrogram and heatmap square
-        this.margin = { top: 50, right: 20, bottom: 50, left: 150 };
-        const legendWidth = 80;
+        // Responsive margins based on container size
+        const marginTop = Math.max(containerHeight * 0.08, 30);
+        const marginRight = Math.max(containerWidth * 0.02, 15);
+        const marginBottom = Math.max(containerHeight * 0.08, 30);
+        const marginLeft = Math.max(containerWidth * 0.12, 80);
         
-        // Calculate square size based on available space
+        this.margin = { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft };
+        const legendWidth = Math.max(containerWidth * 0.08, 60);
+        
+        // Calculate available space and make visualization fit
         const availableWidth = containerWidth - this.margin.left - this.margin.right - legendWidth;
-        const squareSize = Math.min(500, availableWidth / 2); // Fit both squares
+        const availableHeight = containerHeight - this.margin.top - this.margin.bottom;
+        
+        // Make square size based on the smaller dimension to fit properly
+        const maxSquareSize = Math.min(availableWidth / 2, availableHeight);
+        const squareSize = Math.max(maxSquareSize, 200); // Minimum 200px
         
         const dendrogramWidth = squareSize;
         const heatmapWidth = squareSize;
@@ -141,13 +167,16 @@ export default {
         
         const totalWidth = this.margin.left + dendrogramWidth + heatmapWidth + legendWidth + this.margin.right;
         
-        // Create SVG
+        // Create SVG with proper responsiveness
         this.svg = d3.select(container)
           .append('svg')
-          .attr('width', totalWidth)
-          .attr('height', this.height)
+          .attr('width', '100%')
+          .attr('height', '100%')
           .attr('viewBox', [0, 0, totalWidth, this.height])
-          .attr('style', 'max-width: 100%; height: auto;');
+          .attr('preserveAspectRatio', 'xMidYMid meet')
+          .style('max-width', '100%')
+          .style('height', 'auto')
+          .style('display', 'block');
         
         // Create hierarchical clustering using distance matrix
         const n = this.distanceMatrix.length;
@@ -510,6 +539,9 @@ export default {
       // Create color scale function
       const clusterColorScale = (cluster) => clusterColors[cluster] || '#999';
       
+      // Calculate responsive stroke width based on dendrogram size
+      const baseStrokeWidth = Math.max(Math.min(width * 0.005, 2.5), 1);
+      
       // Draw dendrogram links
       function drawLinks(node) {
         if (node.left && node.right) {
@@ -523,7 +555,7 @@ export default {
             .attr('x2', x)
             .attr('y2', node.right.y)
             .attr('stroke', branchColor)
-            .attr('stroke-width', 2.5)
+            .attr('stroke-width', baseStrokeWidth)
             .attr('opacity', 0.8);
           
           // Horizontal line to left child
@@ -533,7 +565,7 @@ export default {
             .attr('x2', xScale(node.left.height))
             .attr('y2', node.left.y)
             .attr('stroke', clusterColorScale(node.left.cluster))
-            .attr('stroke-width', 2.5)
+            .attr('stroke-width', baseStrokeWidth)
             .attr('opacity', 0.8);
           
           // Horizontal line to right child
@@ -543,7 +575,7 @@ export default {
             .attr('x2', xScale(node.right.height))
             .attr('y2', node.right.y)
             .attr('stroke', clusterColorScale(node.right.cluster))
-            .attr('stroke-width', 2.5)
+            .attr('stroke-width', baseStrokeWidth)
             .attr('opacity', 0.8);
           
           drawLinks(node.left);
@@ -555,9 +587,11 @@ export default {
       
       // Threshold line will be drawn via updateThresholdLine() method after initial render
       
-      // Create axis with regular ticks (not threshold-based)
+      // Create axis with regular ticks (not threshold-based) - responsive font
+      const axisFontSize = Math.max(Math.min(width * 0.025, 10), 7);
+      
       const xAxis = d3.axisTop(xScale)
-        .ticks(6)
+        .ticks(Math.max(Math.floor(width / 100), 4))
         .tickFormat(d => {
           // Remove NaN, format numbers properly, and ensure clean values
           if (isNaN(d) || d === null || d === undefined) return '';
@@ -569,9 +603,9 @@ export default {
         .attr('transform', 'translate(0, 0)')
         .call(xAxis);
       
-      // Style axis
+      // Style axis with responsive font
       axisGroup.selectAll('text')
-        .attr('font-size', '10px')
+        .attr('font-size', `${axisFontSize}px`)
         .attr('fill', '#555');
       
       // Remove any NaN or invalid tick marks
@@ -602,6 +636,9 @@ export default {
       
       const thresholdX = this.xScale(thresholdValue);
       
+      // Calculate responsive stroke width for threshold line
+      const thresholdStrokeWidth = Math.max(Math.min(this.height * 0.006, 3), 1.5);
+      
       // Draw vertical dotted line at threshold
       this.dendrogramGroup.append('line')
         .attr('class', 'threshold-line')
@@ -610,17 +647,19 @@ export default {
         .attr('x2', thresholdX)
         .attr('y2', this.height - this.margin.top - this.margin.bottom)
         .attr('stroke', '#ff6b35')
-        .attr('stroke-width', 3)
+        .attr('stroke-width', thresholdStrokeWidth)
         .attr('stroke-dasharray', '5,5')
         .attr('opacity', 0.9);
       
-      // Add label background
+      // Add label with responsive font size
+      const labelFontSize = Math.max(Math.min(this.height * 0.02, 11), 8);
+      
       const text = this.dendrogramGroup.append('text')
         .attr('class', 'threshold-label')
         .attr('x', thresholdX)
         .attr('y', -15)
         .attr('text-anchor', 'middle')
-        .attr('font-size', '11px')
+        .attr('font-size', `${labelFontSize}px`)
         .attr('font-weight', 'bold')
         .attr('fill', '#ff6b35')
         .text(this.selectedThreshold);
@@ -675,13 +714,17 @@ export default {
     
     addColorLegend(svg, colorScale, margin, x, totalHeight) {
       const legendHeight = Math.min(200, totalHeight - margin.top - margin.bottom);
-      const legendWidth = 20;
+      const legendWidth = Math.max(totalHeight * 0.03, 15);
       
       const legendGroup = svg.append('g')
         .attr('transform', `translate(${x}, ${margin.top})`);
       
       // Create gradient
-      const defs = svg.append('defs');
+      const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs');
+      
+      // Remove existing gradient if present
+      defs.select('#heatmap-gradient').remove();
+      
       const gradient = defs.append('linearGradient')
         .attr('id', 'heatmap-gradient')
         .attr('x1', '0%')
@@ -702,25 +745,38 @@ export default {
       legendGroup.append('rect')
         .attr('width', legendWidth)
         .attr('height', legendHeight)
-        .style('fill', 'url(#heatmap-gradient)');
+        .style('fill', 'url(#heatmap-gradient)')
+        .attr('stroke', '#ccc')
+        .attr('stroke-width', 0.5);
       
-      // Add scale
+      // Add scale with responsive font
+      const legendFontSize = Math.max(Math.min(totalHeight * 0.015, 10), 7);
+      
       const legendScale = d3.scaleLinear()
         .domain(colorScale.domain())
         .range([legendHeight, 0]);
       
-      const legendAxis = d3.axisRight(legendScale).ticks(5);
-      legendGroup.append('g')
+      const legendAxis = d3.axisRight(legendScale)
+        .ticks(Math.max(Math.floor(legendHeight / 40), 3));
+      
+      const axisGroup = legendGroup.append('g')
         .attr('transform', `translate(${legendWidth}, 0)`)
         .call(legendAxis);
       
-      // Add label
+      // Style axis text
+      axisGroup.selectAll('text')
+        .attr('font-size', `${legendFontSize}px`);
+      
+      // Add label with responsive font
+      const labelFontSize = Math.max(Math.min(totalHeight * 0.018, 11), 8);
+      
       legendGroup.append('text')
         .attr('transform', 'rotate(-90)')
-        .attr('y', -30)
+        .attr('y', -Math.max(totalHeight * 0.04, 25))
         .attr('x', -legendHeight / 2)
         .attr('text-anchor', 'middle')
-        .style('font-size', '12px')
+        .style('font-size', `${labelFontSize}px`)
+        .style('font-weight', '600')
         .text('Distance');
     }
   }
@@ -731,47 +787,93 @@ export default {
 .heatmap-dendrogram-container {
   width: 100%;
   height: 100%;
-  padding: 8px;
   background-color: #f8f9fa;
   border: 1px solid #e0e0e0;
-  display: flex;
-  flex-direction: column;
+  position: relative;
   overflow: hidden;
 }
 
-.heatmap-dendrogram-container h3 {
-  margin: 0 0 6px 0;
-  color: #333;
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  letter-spacing: 0.3px;
+.header-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 4px 8px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.header-overlay:hover {
+  opacity: 1;
+}
+
+.header-overlay h3 {
+  margin: 0;
+  color: white;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.matrix-size {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9px;
+  font-weight: 400;
 }
 
 .chart-container {
   width: 100%;
-  flex: 1;
+  height: 100%;
   overflow: auto;
   background-color: white;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 10px;
-  border: 1px solid #d0d0d0;
-  min-height: 0;
+}
+
+.chart-container svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
 }
 
 .loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
-  padding: 40px;
+  padding: 20px 40px;
   color: #666;
   font-size: 13px;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
-  padding: 40px;
+  padding: 20px 40px;
   color: #e74c3c;
   font-size: 13px;
-  background-color: #fadbd8;
-  border-radius: 4px;
+  background-color: rgba(250, 219, 216, 0.95);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 80%;
 }
 </style>
 

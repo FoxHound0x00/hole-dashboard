@@ -11,14 +11,50 @@
           </select>
         </div>
       </div>
-      <button class="save-btn" @click="saveAllVisualizations" :disabled="isSaving">
-        <svg v-if="!isSaving" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z"/>
-          <path d="M14 14H2v-3h1v2h10v-2h1v3z"/>
-        </svg>
-        <span v-if="isSaving" class="spinner"></span>
-        {{ isSaving ? 'Saving...' : 'Save All' }}
-      </button>
+      <div class="header-actions">
+        <button class="upload-btn" @click="triggerModelUpload" title="Upload Custom Model">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 2l4 4h-2.5v5h-3V6H4l4-4z"/>
+            <path d="M14 14H2v-3h1v2h10v-2h1v3z"/>
+          </svg>
+          Model
+        </button>
+        
+        <button class="upload-btn" @click="triggerDataUpload" title="Upload Point Cloud Data">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 2l4 4h-2.5v5h-3V6H4l4-4z"/>
+            <circle cx="4" cy="12" r="1"/>
+            <circle cx="8" cy="13" r="1"/>
+            <circle cx="12" cy="12" r="1"/>
+          </svg>
+          Data
+        </button>
+        
+        <button class="save-btn" @click="saveAllVisualizations" :disabled="isSaving">
+          <svg v-if="!isSaving" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 12l-4-4h2.5V3h3v5H12L8 12z"/>
+            <path d="M14 14H2v-3h1v2h10v-2h1v3z"/>
+          </svg>
+          <span v-if="isSaving" class="spinner"></span>
+          {{ isSaving ? 'Saving...' : 'Save All' }}
+        </button>
+      </div>
+      
+      <!-- Hidden file inputs -->
+      <input 
+        ref="modelFileInput" 
+        type="file" 
+        @change="handleModelUpload" 
+        accept=".pkl,.pickle,.joblib"
+        style="display: none"
+      />
+      <input 
+        ref="dataFileInput" 
+        type="file" 
+        @change="handleDataUpload" 
+        accept=".csv,.txt,.npy"
+        style="display: none"
+      />
     </div>
     
     <!-- Left Sidebar: Selectors and Filters -->
@@ -31,25 +67,27 @@
         @update:selected-clusters="updateSelectedClusters"
       />
       
-      <ClusterFilterSlider 
-        :cluster-data="filteredClusterData" 
-        @update:filtered-data="updateClusterSizeFiltered"
-      />
-      
-      <!-- Noisy Threshold Control -->
-      <div class="noisy-threshold-control">
-        <h3>Noisy Threshold:</h3>
-        <div class="threshold-input-container">
-          <input 
-            type="number" 
-            v-model.number="noisyThreshold"
-            min="1"
-            max="50"
-            class="threshold-input"
-          />
-          <span class="threshold-label">datapoints</span>
+      <div class="controls-row">
+        <ClusterFilterSlider 
+          :cluster-data="filteredClusterData"
+          @update:filtered-data="updateClusterSizeFiltered"
+        />
+        
+        <!-- Noisy Threshold Control -->
+        <div class="noisy-threshold-control">
+          <h3>Noisy Threshold:</h3>
+          <div class="threshold-input-container">
+            <input 
+              type="number" 
+              v-model.number="noisyThreshold"
+              min="1"
+              max="50"
+              class="threshold-input"
+            />
+            <span class="threshold-label">datapoints</span>
+          </div>
+          <p class="threshold-help">Clusters with fewer than {{ noisyThreshold }} datapoints will appear gray</p>
         </div>
-        <p class="threshold-help">Clusters with fewer than {{ noisyThreshold }} datapoints will appear gray</p>
       </div>
     </div>
     
@@ -623,6 +661,84 @@ export default {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+    },
+    
+    // Trigger model file upload
+    triggerModelUpload() {
+      this.$refs.modelFileInput.click();
+    },
+    
+    // Trigger data file upload
+    triggerDataUpload() {
+      this.$refs.dataFileInput.click();
+    },
+    
+    // Handle model file upload
+    async handleModelUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/upload_model', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (response.data.success) {
+          // Refresh config to get the new model in the dropdown
+          await this.fetchConfig();
+          // Select the newly uploaded model
+          this.selectedOptions['Model'] = response.data.model_name;
+          // Update cluster data with new model
+          await this.updateClusterData();
+          
+          alert(`Model "${response.data.model_name}" uploaded successfully!`);
+        }
+      } catch (error) {
+        console.error('Error uploading model:', error);
+        alert('Failed to upload model. Please check the file format and try again.');
+      }
+      
+      // Reset file input
+      event.target.value = '';
+    },
+    
+    // Handle data file upload
+    async handleDataUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/upload_data', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (response.data.success) {
+          // Refresh config to get the new dataset in the dropdown
+          await this.fetchConfig();
+          // Select the newly uploaded dataset
+          this.selectedOptions['Dataset'] = response.data.dataset_name;
+          // Update cluster data with new dataset
+          await this.updateClusterData();
+          
+          alert(`Dataset "${response.data.dataset_name}" uploaded successfully!`);
+        }
+      } catch (error) {
+        console.error('Error uploading data:', error);
+        alert('Failed to upload data. Please check the file format and try again.');
+      }
+      
+      // Reset file input
+      event.target.value = '';
     }
   }
 }
@@ -761,6 +877,45 @@ export default {
   }
 }
 
+/* Header Actions Container */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Upload Buttons */
+.upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.upload-btn:hover {
+  background-color: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.upload-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.upload-btn svg {
+  flex-shrink: 0;
+}
+
 /* Sidebar (Selectors and Filters) */
 .sidebar {
   grid-area: sidebar;
@@ -771,16 +926,35 @@ export default {
   min-height: 0;
 }
 
+.controls-row {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: stretch;
+}
+
+.controls-row > .cluster-filter {
+  flex: 2;
+  min-width: 0;
+}
+
+.controls-row > .noisy-threshold-control {
+  flex: 1;
+  min-width: 180px;
+  max-width: 250px;
+}
+
 .noisy-threshold-control {
   background-color: #f8f9fa;
   padding: 8px;
   border: 1px solid #e0e0e0;
-  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .noisy-threshold-control h3 {
-  margin: 0 0 6px 0;
-  font-size: 13px;
+  margin: 0 0 8px 0;
+  font-size: 11px;
   color: #333;
   font-weight: 600;
   letter-spacing: 0.3px;
@@ -789,16 +963,16 @@ export default {
 .threshold-input-container {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .threshold-input {
-  width: 60px;
-  padding: 4px 8px;
+  width: 50px;
+  padding: 3px 6px;
   border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: 3px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -809,15 +983,17 @@ export default {
 }
 
 .threshold-label {
-  font-size: 12px;
+  font-size: 10px;
   color: #666;
+  white-space: nowrap;
 }
 
 .threshold-help {
-  margin: 0;
-  font-size: 11px;
+  margin: auto 0 0 0;
+  font-size: 9px;
   color: #666;
   font-style: italic;
+  line-height: 1.3;
 }
 
 /* Main Visualization Area */

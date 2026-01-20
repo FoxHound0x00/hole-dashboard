@@ -86,13 +86,14 @@ export default defineComponent({
       width.value = graphContainer.value.clientWidth || 800;
       height.value = graphContainer.value.clientHeight || 600;
       
-      // Create SVG
+      // Create SVG with proper responsiveness
       svg.value = d3.select(graphContainer.value)
         .append('svg')
-        .attr('width', width.value)
-        .attr('height', height.value)
+        .attr('width', '100%')
+        .attr('height', '100%')
         .attr('viewBox', [0, 0, width.value, height.value])
-        .attr('style', 'max-width: 100%; height: auto;');
+        .attr('preserveAspectRatio', 'xMidYMid meet')
+        .attr('style', 'max-width: 100%; height: 100%;');
       
       // Create clusters and outlier blobs with more diversity
       const { clusters, outliersBlobs } = generateDiverseClustersWithOutliers();
@@ -756,11 +757,23 @@ export default defineComponent({
 .graph-container {
   grid-area: graph;
   background-color: white;
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid #d0d0d0;
   min-height: 0;
   min-width: 0;
   margin-right: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.graph-container svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
 }
 
 .legend-toggle {

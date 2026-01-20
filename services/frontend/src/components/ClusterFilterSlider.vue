@@ -174,8 +174,8 @@
   }
   
   .cluster-filter h3 {
-    margin: 0 0 6px 0;
-    font-size: 13px;
+    margin: 0 0 8px 0;
+    font-size: 11px;
     color: #333;
     font-weight: 600;
     letter-spacing: 0.3px;
@@ -184,101 +184,95 @@
   .slider-container {
     display: flex;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 10px;
+    margin-bottom: 8px;
   }
   
   .size-slider {
     flex: 1;
-    height: 5px;
+    min-width: 0;
+    height: 4px;
     background: linear-gradient(to right, #e1e1e1, #4caf50);
-    border-radius: 5px;
+    border-radius: 4px;
     -webkit-appearance: none;
     appearance: none;
     outline: none;
-    margin-right: 15px;
   }
   
   .size-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: #4caf50;
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all 0.15s ease;
   }
   
   .size-slider::-webkit-slider-thumb:hover {
     background: #3d8b40;
-    box-shadow: 0 3px 7px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
   }
   
   .size-slider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: #4caf50;
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: all 0.15s ease;
     border: none;
   }
   
   .size-slider::-moz-range-thumb:hover {
     background: #3d8b40;
-    box-shadow: 0 3px 7px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
   }
   
   .slider-value {
-    width: 80px;
+    min-width: 60px;
     text-align: right;
-    font-weight: bold;
+    font-weight: 600;
+    font-size: 11px;
     color: #4caf50;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   
 .filter-info {
-  margin-top: 10px;
-  font-size: 12px;
+  font-size: 9px;
   color: #666;
+  line-height: 1.4;
+}
+
+.filter-info p {
+  margin: 0 0 8px 0;
 }
   
   .stats {
     display: flex;
-    gap: 20px;
-    margin-top: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
   }
   
   .stat-item {
     display: flex;
     align-items: center;
+    gap: 4px;
+    font-size: 9px;
   }
   
   .stat-label {
-    margin-right: 5px;
+    color: #777;
+    font-weight: 500;
   }
   
   .stat-value {
-    font-weight: bold;
+    font-weight: 600;
     color: #2c3e50;
   }
   
-  @media (max-width: 768px) {
-    .slider-container {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    
-    .slider-value {
-      width: auto;
-      text-align: left;
-      margin-top: 5px;
-    }
-    
-    .stats {
-      flex-direction: column;
-      gap: 5px;
-    }
-  }
   </style>

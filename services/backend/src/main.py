@@ -1,10 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 import collections
 import json
 import os
 import numpy as np
+import pickle
+import joblib
+from pathlib import Path
 
 app = FastAPI()
 
@@ -147,3 +150,53 @@ async def get_lda():
         return {"error": "LDA projection not found"}
     except Exception as e:
         return {"error": str(e)}
+
+@app.post("/upload_model")
+async def upload_model(file: UploadFile = File(...)):
+    try:
+        # Create models directory if it doesn't exist
+        models_dir = Path("data/models")
+        models_dir.mkdir(exist_ok=True)
+        
+        # Save the uploaded file
+        file_path = models_dir / file.filename
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Validate that it's a valid pickle/joblib file
+        try:
+            if file.filename.endswith('.joblib'):
+                model = joblib.load(file_path)
+            else:
+                with open(file_path, 'rb') as f:
+                    model = pickle.load(f)
+        except Exception as e:
+            # Remove invalid file
+            os.remove(file_path)
+            return {"success": False, "error": f"Invalid model file: {str(e)}"}
+        
+        # Get model name without extension
+        model_name = Path(file.filename).stem
+        
+        # Update config.json to include the new model
+        with open("src/config.json", "r") as f:
+            config_data = json.load(f)
+        
+        if "Model" not in config_data:
+            config_data["Model"] = []
+        
+        if model_name not in config_data["Model"]:
+            config_data["Model"].append(model_name)
+            
+            with open("src/config.json", "w") as f:
+                json.dump(config_data, f, indent=2)
+        
+        return {
+            "success": True,
+            "model_name": model_name,
+            "message": f"Model {model_name} uploaded successfully"
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
