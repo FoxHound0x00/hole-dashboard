@@ -1,6 +1,6 @@
 <template>
   <div class="force-directed-graph" :class="{ 'legend-expanded': legendExpanded, 'menu-expanded': menuExpanded }">
-    <h3>Cluster Visualization</h3>
+    <h3>Blob Visualization</h3>
     <div class="menu-toggle" @click="menuExpanded = !menuExpanded">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
         <path v-if="!menuExpanded" d="M5 3l6 5-6 5V3z"/>

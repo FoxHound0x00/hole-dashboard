@@ -1,7 +1,7 @@
 <!-- ClusterFilterSlider.vue -->
 <template>
     <div class="cluster-filter">
-      <h3>Filter Clusters by Size:</h3>
+      <h3>Filter Clusters by Size</h3>
       <div class="slider-container">
         <input 
           type="range" 
@@ -174,8 +174,8 @@
   }
   
   .cluster-filter h3 {
-    margin: 0 0 8px 0;
-    font-size: 11px;
+    margin: 0 0 6px 0;
+    font-size: 13px;
     color: #333;
     font-weight: 600;
     letter-spacing: 0.3px;
@@ -191,9 +191,9 @@
   .size-slider {
     flex: 1;
     min-width: 0;
-    height: 4px;
+    height: 6px;
     background: linear-gradient(to right, #e1e1e1, #4caf50);
-    border-radius: 4px;
+    border-radius: 3px;
     -webkit-appearance: none;
     appearance: none;
     outline: none;
@@ -202,67 +202,70 @@
   .size-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: #4caf50;
     cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: all 0.15s ease;
   }
   
   .size-slider::-webkit-slider-thumb:hover {
     background: #3d8b40;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    transform: scale(1.1);
   }
   
   .size-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: #4caf50;
     cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: all 0.15s ease;
     border: none;
   }
   
   .size-slider::-moz-range-thumb:hover {
     background: #3d8b40;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    transform: scale(1.1);
   }
   
   .slider-value {
-    min-width: 60px;
+    min-width: 70px;
     text-align: right;
     font-weight: 600;
-    font-size: 11px;
+    font-size: 13px;
     color: #4caf50;
     white-space: nowrap;
     flex-shrink: 0;
   }
   
 .filter-info {
-  font-size: 9px;
+  font-size: 11px;
   color: #666;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .filter-info p {
   margin: 0 0 8px 0;
+  font-weight: 500;
 }
   
   .stats {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     flex-wrap: wrap;
   }
   
   .stat-item {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 9px;
+    gap: 5px;
+    font-size: 11px;
   }
   
   .stat-label {
@@ -271,7 +274,7 @@
   }
   
   .stat-value {
-    font-weight: 600;
+    font-weight: 700;
     color: #2c3e50;
   }
   

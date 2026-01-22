@@ -1,5 +1,6 @@
 <template>
   <div class="sankey-wrapper">
+    <h3>Cluster Flow Visualization</h3>
     <div ref="chart" class="chart-container"></div>
     <div class="info-box" ref="infoBox" :class="{ 'visible': selectedInfo }">
       <div v-if="selectedInfo">
@@ -788,15 +789,31 @@ export default {
 .sankey-wrapper {
   height: 100%;
   width: 100%;
+  background-color: #f8f9fa;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sankey-wrapper h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #333;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 .chart-container {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  background-color: #fafafa;
+  background-color: white;
+  border: 1px solid #d0d0d0;
   position: relative;
   display: flex;
   align-items: center;

@@ -1,8 +1,6 @@
 <template>
   <div class="cluster-selector">
-    <div class="header-overlay">
-      <h3>Death Threshold</h3>
-    </div>
+    <h3>Death Threshold</h3>
     <div ref="chartContainer" class="chart-container"></div>
   </div>
 </template>
@@ -63,7 +61,7 @@ export default defineComponent({
       const marginTop = Math.max(containerHeight * 0.1, 15)
       const marginRight = Math.max(containerWidth * 0.06, 30)
       const marginBottom = Math.max(containerHeight * 0.15, 25)
-      const marginLeft = Math.max(containerWidth * 0.06, 30)
+      const marginLeft = Math.max(containerWidth * 0.08, 50)
       const legendWidth = Math.max(containerWidth * 0.12, 80)
       
       const margin = { top: marginTop, right: marginRight, bottom: marginBottom, left: marginLeft }
@@ -366,41 +364,30 @@ export default defineComponent({
 <style scoped>
 .cluster-selector {
   background-color: #f8f9fa;
+  padding: 8px;
   border: 1px solid #e0e0e0;
   height: 100%;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.header-overlay {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  background-color: rgba(0, 0, 0, 0.5);
-  padding: 4px 8px;
-  border-radius: 3px;
-  pointer-events: none;
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
-}
-
-.header-overlay:hover {
-  opacity: 1;
-}
-
-.header-overlay h3 {
-  margin: 0;
-  color: white;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
+.cluster-selector h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #333;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 .chart-container {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   background-color: white;
+  border: 1px solid #d0d0d0;
   overflow: auto;
   position: relative;
   display: flex;

@@ -1,11 +1,6 @@
 <template>
   <div class="heatmap-dendrogram-container">
-    <div class="header-overlay">
-      <h3>{{ metric }}</h3>
-      <span v-if="!loading && !error && distanceMatrix" class="matrix-size">
-        {{ distanceMatrix.length }}×{{ distanceMatrix.length }}
-      </span>
-    </div>
+    <h3>Distance Heatmap <span class="metric-subtitle">({{ metric }})</span></h3>
     <div v-if="loading" class="loading">Loading distance matrix...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else ref="chartContainer" class="chart-container"></div>
@@ -788,50 +783,36 @@ export default {
   width: 100%;
   height: 100%;
   background-color: #f8f9fa;
+  padding: 8px;
   border: 1px solid #e0e0e0;
   position: relative;
   overflow: hidden;
-}
-
-.header-overlay {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  background-color: rgba(0, 0, 0, 0.5);
-  padding: 4px 8px;
-  border-radius: 3px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  pointer-events: none;
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
+  flex-direction: column;
 }
 
-.header-overlay:hover {
-  opacity: 1;
+.heatmap-dendrogram-container h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #333;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
-.header-overlay h3 {
-  margin: 0;
-  color: white;
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
-}
-
-.matrix-size {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 9px;
+.metric-subtitle {
   font-weight: 400;
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .chart-container {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   background-color: white;
+  border: 1px solid #d0d0d0;
   position: relative;
   display: flex;
   align-items: center;

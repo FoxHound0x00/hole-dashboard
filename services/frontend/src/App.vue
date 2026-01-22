@@ -75,7 +75,7 @@
         
         <!-- Noisy Threshold Control -->
         <div class="noisy-threshold-control">
-          <h3>Noisy Threshold:</h3>
+          <h3>Noisy Threshold</h3>
           <div class="threshold-input-container">
             <input 
               type="number" 
@@ -953,8 +953,8 @@ export default {
 }
 
 .noisy-threshold-control h3 {
-  margin: 0 0 8px 0;
-  font-size: 11px;
+  margin: 0 0 6px 0;
+  font-size: 13px;
   color: #333;
   font-weight: 600;
   letter-spacing: 0.3px;
@@ -963,37 +963,40 @@ export default {
 .threshold-input-container {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
 .threshold-input {
-  width: 50px;
-  padding: 3px 6px;
+  width: 60px;
+  padding: 6px 10px;
   border: 1px solid #dcdfe6;
-  border-radius: 3px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
   text-align: center;
+  transition: all 0.2s ease;
 }
 
 .threshold-input:focus {
   outline: none;
   border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.15);
 }
 
 .threshold-label {
-  font-size: 10px;
+  font-size: 12px;
   color: #666;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .threshold-help {
   margin: auto 0 0 0;
-  font-size: 9px;
+  font-size: 11px;
   color: #666;
-  font-style: italic;
-  line-height: 1.3;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 /* Main Visualization Area */
